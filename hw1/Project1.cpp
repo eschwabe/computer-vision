@@ -1,4 +1,4 @@
-#include "mainwindow.h"
+    #include "mainwindow.h"
 #include "math.h"
 #include "ui_mainwindow.h"
 #include <QtGui>
@@ -172,10 +172,73 @@ void MainWindow::HalfImage(QImage &image)
 }
 
 
-
+// Gaussian Blur Image
 void MainWindow::GaussianBlurImage(QImage *image, double sigma)
 {
-    // Add your code here.  Look at MeanBlurImage to get yourself started.
+    int r, c, rd, cd, x, y;
+    QRgb pixel;
+
+    // This is the size of the kernel
+    int radius = 3;
+    int size = 2*radius + 1;
+
+    // Create a buffer image so we're not reading and writing to the same image during filtering.
+    QImage buffer;
+    int width = image->width();
+    int height = image->height();
+
+    // This creates an image of size (w + 2*radius, h + 2*radius) with black borders.
+    // This could be improved by filling the pixels using a different padding technique (reflected, fixed, etc.)
+    buffer = image->copy(-radius, -radius, width + 2*radius, height + 2*radius);
+
+    // Compute kernel to convolve with the image.
+    double *kernel = new double [size*size];
+
+    // Compute Z
+    double invz = 1 / (2*M_PI*pow(sigma,2.0));
+
+    // Compute kernel weights
+    for(x=0; x<size; x++)
+    {
+        for(y=0; y<size; y++)
+        {
+            kernel[x*size+y] = invz*exp( (-(pow(x,2) + pow(y,2)) / 2*pow(sigma,2)) );
+        }
+    }
+
+    // For each pixel in the image...
+    for(r=0;r<height;r++)
+    {
+        for(c=0;c<width;c++)
+        {
+            double rgb[3];
+
+            rgb[0] = 0.0;
+            rgb[1] = 0.0;
+            rgb[2] = 0.0;
+
+            // Convolve the kernel at each pixel
+            for(rd=-radius;rd<=radius;rd++)
+                for(cd=-radius;cd<=radius;cd++)
+                {
+                     // Get the pixel value
+                     pixel = buffer.pixel(c + cd + radius, r + rd + radius);
+
+                     // Get the value of the kernel
+                     double weight = kernel[(rd + radius)*size + cd + radius];
+
+                     rgb[0] += weight*(double) qRed(pixel);
+                     rgb[1] += weight*(double) qGreen(pixel);
+                     rgb[2] += weight*(double) qBlue(pixel);
+                }
+
+            // Store mean pixel in the image to be returned.
+            image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
+        }
+    }
+
+    // Clean up.
+    delete [] kernel;
 }
 
 void MainWindow::SeparableGaussianBlurImage(QImage *image, double sigma)
