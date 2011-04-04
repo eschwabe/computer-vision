@@ -32,6 +32,7 @@ private:
     double yScroll;
     bool zoomChanged;
 
+    void resizeEvent(QResizeEvent * event);
     void DrawDisplayImage();
     void BlackWhiteImage(QImage *image);
     void AddNoise(QImage *image, double mag, bool colorNoise);

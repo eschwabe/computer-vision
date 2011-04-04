@@ -63,6 +63,13 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::resizeEvent(QResizeEvent * event) {
+    Q_UNUSED(event)
+
+    displayImage = QImage(ui->ImgDisplay->width(), ui->ImgDisplay->height(), QImage::Format_RGB32);
+    DrawDisplayImage();
+}
+
 void MainWindow::DrawDisplayImage()
 {
     int zoom = ui->zoomSlider->value()/20 + 1;
