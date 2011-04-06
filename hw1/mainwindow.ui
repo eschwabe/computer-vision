@@ -78,7 +78,7 @@
         <item row="5" column="0">
          <widget class="QPushButton" name="noiseButton">
           <property name="text">
-           <string>Add noise</string>
+           <string>Add Noise</string>
           </property>
          </widget>
         </item>
@@ -126,7 +126,7 @@
         <item row="7" column="0">
          <widget class="QPushButton" name="gaussianBlurButton">
           <property name="text">
-           <string>Gaussian blur</string>
+           <string>Gaussian Blur</string>
           </property>
          </widget>
         </item>
@@ -340,7 +340,7 @@
         <item row="13" column="0">
          <widget class="QPushButton" name="halfButton">
           <property name="text">
-           <string>Half size</string>
+           <string>Half Size</string>
           </property>
          </widget>
         </item>
@@ -383,7 +383,7 @@
         <item row="16" column="0">
          <widget class="QPushButton" name="peaksButton">
           <property name="text">
-           <string>Find peaks</string>
+           <string>Find Peaks</string>
           </property>
          </widget>
         </item>
@@ -476,7 +476,7 @@
          <enum>Qt::Horizontal</enum>
         </property>
         <property name="sizeType">
-         <enum>QSizePolicy::Preferred</enum>
+         <enum>QSizePolicy::Fixed</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
@@ -514,7 +514,7 @@
          <enum>Qt::Horizontal</enum>
         </property>
         <property name="sizeType">
-         <enum>QSizePolicy::Preferred</enum>
+         <enum>QSizePolicy::Fixed</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
@@ -708,14 +708,6 @@
    </layout>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
-  <widget class="QToolBar" name="mainToolBar">
-   <attribute name="toolBarArea">
-    <enum>TopToolBarArea</enum>
-   </attribute>
-   <attribute name="toolBarBreak">
-    <bool>false</bool>
-   </attribute>
-  </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
     <rect>

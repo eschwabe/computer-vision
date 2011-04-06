@@ -217,6 +217,7 @@ void MainWindow::GaussianBlurImage(QImage *image, double sigma)
             rgb[1] = 0.0;
             rgb[2] = 0.0;
 
+
             // Convolve the kernel at each pixel
             for(rd=-radius;rd<=radius;rd++)
                 for(cd=-radius;cd<=radius;cd++)
