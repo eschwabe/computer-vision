@@ -1,15 +1,15 @@
-    #include "mainwindow.h"
+#include "mainwindow.h"
 #include "math.h"
 #include "ui_mainwindow.h"
 #include <QtGui>
+#include <iostream>
 
 /***********************************************************************
   This is the only file you need to change for your assignment.  The
   other files control the UI (in case you want to make changes.)
 ************************************************************************/
 
-
-// The first four functions provide example code to help get you started
+#define DEBUG true
 
 // Convert an image to grey-scale
 void MainWindow::BlackWhiteImage(QImage *image)
@@ -171,42 +171,60 @@ void MainWindow::HalfImage(QImage &image)
         }
 }
 
-
 // Gaussian Blur Image
+// Create kernel based on gaussian equation and interate through each pixel in the image
+// blurring it with other pixels nearby.
 void MainWindow::GaussianBlurImage(QImage *image, double sigma)
 {
     int r, c, rd, cd, x, y;
     QRgb pixel;
 
-    // This is the size of the kernel
-    int radius = 3;
+    // kernel radius and size
+    int radius = sigma;
     int size = 2*radius + 1;
 
-    // Create a buffer image so we're not reading and writing to the same image during filtering.
+    // create a buffer image so we're not reading and writing to the same image during filtering.
     QImage buffer;
     int width = image->width();
     int height = image->height();
 
-    // This creates an image of size (w + 2*radius, h + 2*radius) with black borders.
-    // This could be improved by filling the pixels using a different padding technique (reflected, fixed, etc.)
+    // create an image of size (w + 2*radius, h + 2*radius) with black borders.
+    // could be improved by filling the pixels using a different padding technique (reflected, fixed, etc.)
     buffer = image->copy(-radius, -radius, width + 2*radius, height + 2*radius);
 
-    // Compute kernel to convolve with the image.
+    // compute kernel to convolve with the image
     double *kernel = new double [size*size];
 
-    // Compute Z
-    double invz = 1 / (2*M_PI*pow(sigma,2.0));
-
-    // Compute kernel weights
-    for(x=0; x<size; x++)
+    // compute kernel weights and z normalization
+    double znorm = 0.0;
+    for(x=-radius; x<radius; x++)
     {
-        for(y=0; y<size; y++)
+        for(y=-radius; y<radius; y++)
         {
-            kernel[x*size+y] = invz*exp( (-(pow(x,2) + pow(y,2)) / 2*pow(sigma,2)) );
+            double value = exp( -(pow(x,2) + pow(y,2)) / (2*pow(sigma,2)) );
+            kernel[(x+radius)*size+(y+radius)] = value;
+            znorm += value;
         }
     }
+    if(DEBUG) std::cout << "Z Normalize: " << znorm << std::endl;
 
-    // For each pixel in the image...
+    // normalize kernel
+    double kernel_total = 0.0;
+    for(x=-radius; x<radius; x++)
+    {
+        if(DEBUG) std::cout << "Row [" << x+radius << "]:";
+        for(y=-radius; y<radius; y++)
+        {
+            double tmp = kernel[(x+radius)*size+(y+radius)] / znorm;
+            kernel[(x+radius)*size+(y+radius)] = tmp;
+            kernel_total += tmp;
+            if(DEBUG) std::cout << tmp << ",";
+        }
+        if(DEBUG) std::cout << std::endl;
+    }
+    if(DEBUG) std::cout << "Kernel Total: " << kernel_total << std::endl;
+
+    // for each pixel in the image
     for(r=0;r<height;r++)
     {
         for(c=0;c<width;c++)
@@ -217,9 +235,9 @@ void MainWindow::GaussianBlurImage(QImage *image, double sigma)
             rgb[1] = 0.0;
             rgb[2] = 0.0;
 
-
             // Convolve the kernel at each pixel
             for(rd=-radius;rd<=radius;rd++)
+            {
                 for(cd=-radius;cd<=radius;cd++)
                 {
                      // Get the pixel value
@@ -232,6 +250,7 @@ void MainWindow::GaussianBlurImage(QImage *image, double sigma)
                      rgb[1] += weight*(double) qGreen(pixel);
                      rgb[2] += weight*(double) qBlue(pixel);
                 }
+            }
 
             // Store mean pixel in the image to be returned.
             image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
