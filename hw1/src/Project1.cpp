@@ -169,26 +169,71 @@ void MainWindow::HalfImage(QImage &image)
         }
 }
 
-// Gaussian Blur Image
-// Create kernel based on gaussian equation and interate through each pixel in the image
-// blurring it with other pixels nearby.
-void MainWindow::GaussianBlurImage(QImage *image, double sigma)
+// ApplyKernel
+// Applies a kernel filter to an image. The kernel can be any height and width in size.
+static void ApplyKernel(QImage *image, const double* kernel, const int kh, const int kw)
 {
-    int r, c, rd, cd, x, y;
-    QRgb pixel;
-
-    // kernel radius and size
-    int radius = sigma;
-    int size = 2*radius + 1;
+    int r, rd;      // image and kernel row
+    int c, cd;      // image and kernel col
+    QRgb pixel;     // temporary pixel
 
     // create a buffer image so we're not reading and writing to the same image during filtering.
     QImage buffer;
     int width = image->width();
     int height = image->height();
 
-    // create an image of size (w + 2*radius, h + 2*radius) with black borders.
+    // compute horizontal and vertical kernel radius
+    int khr = kh/2;
+    int kwr = kw/2;
+
+    // create an image of size (w + kernel width, h + kernel height) with black borders.
     // could be improved by filling the pixels using a different padding technique (reflected, fixed, etc.)
-    buffer = image->copy(-radius, -radius, width + 2*radius, height + 2*radius);
+    buffer = image->copy(-kwr, -khr, width + kw, height + kh);
+
+    // for each pixel in the image
+    for(r=0;r<height;r++)
+    {
+        for(c=0;c<width;c++)
+        {
+            double rgb[3];
+
+            rgb[0] = 0.0;
+            rgb[1] = 0.0;
+            rgb[2] = 0.0;
+
+            // convolve the kernel at each pixel
+            for(rd=-khr;rd<=khr;rd++)
+            {
+                for(cd=-kwr;cd<=kwr;cd++)
+                {
+                     // get the pixel value
+                     pixel = buffer.pixel(c + cd + kwr, r + rd + khr);
+
+                     // get the value of the kernel
+                     double weight = kernel[(rd + khr)*kw + cd + kwr];
+
+                     rgb[0] += weight*(double) qRed(pixel);
+                     rgb[1] += weight*(double) qGreen(pixel);
+                     rgb[2] += weight*(double) qBlue(pixel);
+                }
+            }
+
+            // store mean pixel in the image to be returned.
+            image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
+        }
+    }
+}
+
+// Gaussian Blur Image
+// Create kernel based on gaussian equation and interate through each pixel in the image
+// blurring it with other pixels nearby.
+void MainWindow::GaussianBlurImage(QImage *image, double sigma)
+{
+    int x, y;
+
+    // kernel radius and size
+    int radius = 3*sigma;
+    int size = 2*radius + 1;
 
     // create kernel to convolve with the image
     double *kernel = new double [size*size];
@@ -214,46 +259,65 @@ void MainWindow::GaussianBlurImage(QImage *image, double sigma)
         }
     }
 
-    // for each pixel in the image
-    for(r=0;r<height;r++)
-    {
-        for(c=0;c<width;c++)
-        {
-            double rgb[3];
+    // apply kernel
+    ApplyKernel(image, kernel, size, size);
 
-            rgb[0] = 0.0;
-            rgb[1] = 0.0;
-            rgb[2] = 0.0;
-
-            // convolve the kernel at each pixel
-            for(rd=-radius;rd<=radius;rd++)
-            {
-                for(cd=-radius;cd<=radius;cd++)
-                {
-                     // get the pixel value
-                     pixel = buffer.pixel(c + cd + radius, r + rd + radius);
-
-                     // get the value of the kernel
-                     double weight = kernel[(rd + radius)*size + cd + radius];
-
-                     rgb[0] += weight*(double) qRed(pixel);
-                     rgb[1] += weight*(double) qGreen(pixel);
-                     rgb[2] += weight*(double) qBlue(pixel);
-                }
-            }
-
-            // store mean pixel in the image to be returned.
-            image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
-        }
-    }
-
-    // Clean up.
+    // clean up
     delete [] kernel;
 }
 
+// Seperable Gaussian Blur Image
+// Seperate Gaussian algorithm into horizonal and vertical components. Apply each component
+// to the image to create the same effect.
 void MainWindow::SeparableGaussianBlurImage(QImage *image, double sigma)
 {
-    // Add your code here.  Done right, you should be able to copy most of the code from GaussianBlurImage.
+    int x, y;
+
+    // kernel radius and size
+    int radius = 3*sigma;
+    int size = 2*radius + 1;
+
+    // create horizontal and vertical kernels to convolve with the image
+    double *x_kernel = new double [size];
+    double *y_kernel = new double [size];
+
+    // compute horizontal kernel weights and z normalization
+    double znorm = 0.0;
+    for(x=-radius; x<=radius; x++)
+    {
+        double value = std::exp( -std::pow((double)x,2) / (2*std::pow(sigma,2)) );
+        x_kernel[x+radius] = value;
+        znorm += value;
+    }
+
+    // normalize horizontal kernel
+    for(x=-radius; x<=radius; x++)
+    {
+        x_kernel[x+radius] /= znorm;
+    }
+
+    // compute vertical kernel weights and z normalization
+    znorm = 0.0;
+    for(y=-radius; y<=radius; y++)
+    {
+        double value = std::exp( -std::pow((double)y,2) / (2*std::pow(sigma,2)) );
+        y_kernel[y+radius] = value;
+        znorm += value;
+    }
+
+    // normalize vertical kernel
+    for(y=-radius; y<=radius; y++)
+    {
+        y_kernel[y+radius] /= znorm;
+    }
+
+    // apply horizonal and then vertical kernels
+    ApplyKernel(image, x_kernel, 1, size);
+    ApplyKernel(image, y_kernel, size, 1);
+
+    // clean up
+    delete [] x_kernel;
+    delete [] y_kernel;
 }
 
 void MainWindow::FirstDerivImage(QImage *image, double sigma)
