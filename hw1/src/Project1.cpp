@@ -1,15 +1,13 @@
 #include "mainwindow.h"
-#include "math.h"
 #include "ui_mainwindow.h"
 #include <QtGui>
+#include <cmath>
 #include <iostream>
 
 /***********************************************************************
   This is the only file you need to change for your assignment.  The
   other files control the UI (in case you want to make changes.)
 ************************************************************************/
-
-#define DEBUG true
 
 // Convert an image to grey-scale
 void MainWindow::BlackWhiteImage(QImage *image)
@@ -192,37 +190,29 @@ void MainWindow::GaussianBlurImage(QImage *image, double sigma)
     // could be improved by filling the pixels using a different padding technique (reflected, fixed, etc.)
     buffer = image->copy(-radius, -radius, width + 2*radius, height + 2*radius);
 
-    // compute kernel to convolve with the image
+    // create kernel to convolve with the image
     double *kernel = new double [size*size];
 
     // compute kernel weights and z normalization
     double znorm = 0.0;
-    for(x=-radius; x<radius; x++)
+    for(x=-radius; x<=radius; x++)
     {
-        for(y=-radius; y<radius; y++)
+        for(y=-radius; y<=radius; y++)
         {
-            double value = exp( -(pow(x,2) + pow(y,2)) / (2*pow(sigma,2)) );
+            double value = std::exp( -(std::pow((double)x,2) + std::pow((double)y,2)) / (2*std::pow(sigma,2)) );
             kernel[(x+radius)*size+(y+radius)] = value;
             znorm += value;
         }
     }
-    if(DEBUG) std::cout << "Z Normalize: " << znorm << std::endl;
 
     // normalize kernel
-    double kernel_total = 0.0;
-    for(x=-radius; x<radius; x++)
+    for(x=-radius; x<=radius; x++)
     {
-        if(DEBUG) std::cout << "Row [" << x+radius << "]:";
-        for(y=-radius; y<radius; y++)
+        for(y=-radius; y<=radius; y++)
         {
-            double tmp = kernel[(x+radius)*size+(y+radius)] / znorm;
-            kernel[(x+radius)*size+(y+radius)] = tmp;
-            kernel_total += tmp;
-            if(DEBUG) std::cout << tmp << ",";
+            kernel[(x+radius)*size+(y+radius)] /= znorm;
         }
-        if(DEBUG) std::cout << std::endl;
     }
-    if(DEBUG) std::cout << "Kernel Total: " << kernel_total << std::endl;
 
     // for each pixel in the image
     for(r=0;r<height;r++)
@@ -235,15 +225,15 @@ void MainWindow::GaussianBlurImage(QImage *image, double sigma)
             rgb[1] = 0.0;
             rgb[2] = 0.0;
 
-            // Convolve the kernel at each pixel
+            // convolve the kernel at each pixel
             for(rd=-radius;rd<=radius;rd++)
             {
                 for(cd=-radius;cd<=radius;cd++)
                 {
-                     // Get the pixel value
+                     // get the pixel value
                      pixel = buffer.pixel(c + cd + radius, r + rd + radius);
 
-                     // Get the value of the kernel
+                     // get the value of the kernel
                      double weight = kernel[(rd + radius)*size + cd + radius];
 
                      rgb[0] += weight*(double) qRed(pixel);
@@ -252,7 +242,7 @@ void MainWindow::GaussianBlurImage(QImage *image, double sigma)
                 }
             }
 
-            // Store mean pixel in the image to be returned.
+            // store mean pixel in the image to be returned.
             image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
         }
     }
