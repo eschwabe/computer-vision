@@ -224,6 +224,20 @@ static void ApplyKernel(QImage *image, const double* kernel, const int kh, const
     }
 }
 
+// Add Image Offset
+// Add a color offset to all pixels
+static void AddImageOffset(QImage *image, QRgb offset)
+{
+    for(int c = 0; c < image->width(); c++)
+    {
+        for(int r = 0; r < image->height(); r++)
+        {
+            QRgb pixel = image->pixel(c, r);
+            image->setPixel( c, r, qRgb(qRed(pixel)+qRed(offset), qGreen(pixel)+qRed(offset), qBlue(pixel)+qBlue(offset)) );
+        }
+    }
+}
+
 // Gaussian Blur Image
 // Create kernel based on gaussian equation and interate through each pixel in the image
 // blurring it with other pixels nearby.
@@ -320,14 +334,95 @@ void MainWindow::SeparableGaussianBlurImage(QImage *image, double sigma)
     delete [] y_kernel;
 }
 
+// FirstDerivImage
+// Compute first derivative guassian on the image.
 void MainWindow::FirstDerivImage(QImage *image, double sigma)
 {
-    // Add your code here.
+    int x;
+
+    // kernel radius and size
+    int radius = 3*sigma;
+    int size = 2*radius + 1;
+
+    // create first derivative horizontal to convolve with the image
+    double *x_kernel = new double [size];
+
+    // compute horizontal first derivative kernel weights
+    for(x=-radius; x<=radius; x++)
+    {
+        // first derivate equation
+        // ( x / sigma^2 ) * ( e ^ (-x^2 / 2*sigma^2) )
+        double value = (x / (std::pow(sigma,2))) * (std::exp(-std::pow((double)x,2) / (2*std::pow(sigma,2))));
+        x_kernel[x+radius] = value;
+    }
+
+    // apply horizonal kernel
+    ApplyKernel(image, x_kernel, 1, size);
+
+    // add image offsets for negative values
+    AddImageOffset(image, qRgb(128, 128, 128));
+
+    // gaussian blur
+    SeparableGaussianBlurImage(image, sigma);
+    
+    // clean up
+    delete [] x_kernel;
 }
 
+// SecondDerivImage
+// Compute guassian second derivative on the image
 void MainWindow::SecondDerivImage(QImage *image, double sigma)
 {
-    // Add your code here.
+    int x, y;
+
+    // kernel radius and size
+    int radius = 3*sigma;
+    int size = 2*radius + 1;
+
+    // create second derivative kernel to convolve with the image
+    double *kernel = new double[size];
+
+    // compute second derivative kernel weights
+    for(x=-radius; x<=radius; x++)
+    {
+        // second derivate equation
+        // ( ( (x^2 - sigma^2) / 2*sigma^2 ) * ( e ^ (-x^2 / 2*sigma^2) )
+        double value = ((std::pow((double)x,2) - std::pow(sigma,2)) / (2*std::pow(sigma,2))) * (std::exp(-std::pow((double)x,2) / (2*std::pow(sigma,2))));
+        kernel[x+radius] = value;
+    }
+
+    // create temporary image copies
+    QImage *hImage = new QImage(*image);
+    QImage *vImage = new QImage(*image);
+
+    // apply kernel in horizonal direction
+    ApplyKernel(hImage, kernel, 1, size);
+
+    // apply kernel in vertical direction
+    ApplyKernel(vImage, kernel, size, 1);
+
+    // merge horizontal and vertical images
+    for(int c = 0; c < image->width(); c++)
+    {
+        for(int r = 0; r < image->height(); r++)
+        {
+            QRgb hPixel = hImage->pixel(c, r);
+            QRgb vPixel = vImage->pixel(c, r);
+            image->setPixel( c, r, hPixel + vPixel );
+        }
+    }
+
+    delete hImage;
+    delete vImage;
+
+    // add image offsets for negative values
+    AddImageOffset(image, qRgb(128, 128, 128));
+
+    // gaussian blur
+    SeparableGaussianBlurImage(image, sigma);
+    
+    // clean up
+    delete [] kernel;
 }
 
 void MainWindow::SharpenImage(QImage *image, double sigma, double alpha)
