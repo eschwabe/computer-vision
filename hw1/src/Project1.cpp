@@ -4,10 +4,385 @@
 #include <cmath>
 #include <iostream>
 
-/***********************************************************************
-  This is the only file you need to change for your assignment.  The
-  other files control the UI (in case you want to make changes.)
-************************************************************************/
+// ----------------------------------------------------------------------------
+// This is the only file you need to change for your assignment.  The
+// other files control the UI (in case you want to make changes.)
+// ----------------------------------------------------------------------------
+
+// Pixel
+struct Pixel {
+    double r;
+    double g;
+    double b;
+};
+
+// ----------------------------------------------------------------------------
+// HELPER METHODS
+// ----------------------------------------------------------------------------
+
+// Get the pixel at the specified row and column using image width and padding
+// Buffer width is calculated as image width plus 2x padding 
+static Pixel* BufferGetPixel(Pixel* buffer, const int& imgWidth, const int& padding, const int& row, const int& col)
+{
+    int bWidth = imgWidth + (2*padding);
+    Pixel* p = &buffer[ (row*bWidth) + col ];
+    return p;
+}
+
+// Creates a copy of a pixel buffer.
+// Buffer copy must be freed by caller.
+static Pixel* BufferCreateCopy(Pixel *buffer, const int& imgWidth, const int& imgHeight, const int& padding)
+{
+    // initialize new buffer
+    int bWidth = imgWidth+(padding*2);
+    int bHeight = imgHeight+(padding*2);
+
+    Pixel *newBuffer = new Pixel[ bWidth * bHeight ];
+
+    for(int r = 0; r < bHeight; r++)
+    {
+        for(int c = 0; c < bWidth; c++)
+        {
+            Pixel *newPixel = BufferGetPixel(newBuffer, imgWidth, padding, r, c);
+            Pixel *orgPixel = BufferGetPixel(buffer, imgWidth, padding, r, c);
+            *newPixel = *orgPixel;
+        }
+    }
+
+    return newBuffer;
+}
+
+// Applies a kernel filter to a pixel buffer. Values are updated in the buffer.
+// The kernel can be any odd numbered height and width in size.
+static void BufferApplyKernel(
+    Pixel *buffer, const int& imgWidth, const int& imgHeight, const int& padding, 
+    const double* kernel, const int kHeight, const int kWidth)
+{
+    // compute horizontal and vertical kernel radius
+    int kHeightRadius = kHeight/2;
+    int kWidthRadius = kWidth/2;
+
+    int kHeightPaddingOffset = padding - kHeightRadius;
+    int kWidthPaddingOffset = padding - kWidthRadius;
+
+    // create copy of original buffer
+    Pixel* copyBuffer = BufferCreateCopy(buffer, imgWidth, imgHeight, padding);
+
+    // for each pixel in the image
+    for(int r=0;r<imgHeight;r++)
+    {
+        for(int c=0;c<imgWidth;c++)
+        {
+            double rgb[3];
+
+            rgb[0] = 0.0;
+            rgb[1] = 0.0;
+            rgb[2] = 0.0;
+
+            // convolve the kernel at each pixel
+            for(int rd=-kHeightRadius; rd<=kHeightRadius; rd++)
+            {
+                for(int cd=-kWidthRadius; cd<=kWidthRadius; cd++)
+                {
+                    // get the original pixel value from copy buffer
+                    int pRow = r + (rd + kHeightRadius) + kHeightPaddingOffset;
+                    int pCol = c + (cd + kWidthRadius) + kWidthPaddingOffset;
+
+                    Pixel* p = BufferGetPixel( copyBuffer, imgWidth, padding, pRow, pCol );
+
+                    // get the value of the kernel
+                    double weight = kernel[(rd + kHeightRadius)*kWidth + cd + kWidthRadius];
+
+                    // apply weights
+                    rgb[0] += weight*p->r;
+                    rgb[1] += weight*p->g;
+                    rgb[2] += weight*p->b;
+                }
+            }
+
+            // store mean pixel in the buffer
+            Pixel* pOut = BufferGetPixel( buffer, imgWidth, padding, r+padding, c+padding);
+            pOut->r = rgb[0];
+            pOut->g = rgb[1];
+            pOut->b = rgb[2];
+        }
+    }
+}
+
+// Add a color offset value to every pixel int eh buffer
+static void BufferApplyOffset(Pixel *buffer, const int& imgWidth, const int& imgHeight, const int& padding, QRgb offset)
+{
+    // compute size
+    int bWidth = imgWidth+(padding*2);
+    int bHeight = imgHeight+(padding*2);
+
+    // add offsets
+    for(int r = 0; r < bHeight; r++)
+    {
+        for(int c = 0; c < bWidth; c++)
+        {
+            Pixel* p = BufferGetPixel(buffer, imgWidth, padding, r, c);
+            p->r += qRed(offset);
+            p->g += qGreen(offset);
+            p->b += qBlue(offset);
+        }
+    }
+}
+
+// Adds a buffer of pixel values to an existing buffer
+// Buffers must be the exact same size
+static void BufferAddBuffer(Pixel *buffer, const int& imgWidth, const int& imgHeight, const int& padding, Pixel *vBuffer)
+{
+    // compute size
+    int bWidth = imgWidth+(padding*2);
+    int bHeight = imgHeight+(padding*2);
+
+    for(int r = 0; r < bHeight; r++)
+    {
+        for(int c = 0; c < bWidth; c++)
+        {
+            Pixel* p = BufferGetPixel(buffer, imgWidth, padding, r, c);
+            Pixel* vp = BufferGetPixel(buffer, imgWidth, padding, r, c);
+            p->r += vp->r;
+            p->g += vp->g;
+            p->b += vp->b;
+        }
+    }
+}
+
+// Subtracts a buffer of pixel values from an existing buffer
+// Buffers must be the exact same size
+static void BufferSubtractBuffer(Pixel *buffer, const int& imgWidth, const int& imgHeight, const int& padding, Pixel *vBuffer)
+{
+    // compute size
+    int bWidth = imgWidth+(padding*2);
+    int bHeight = imgHeight+(padding*2);
+
+    for(int r = 0; r < bHeight; r++)
+    {
+        for(int c = 0; c < bWidth; c++)
+        {
+            Pixel* p = BufferGetPixel(buffer, imgWidth, padding, r, c);
+            Pixel* vp = BufferGetPixel(buffer, imgWidth, padding, r, c);
+            p->r -= vp->r;
+            p->g -= vp->g;
+            p->b -= vp->b;
+        }
+    }
+}
+
+// Creates an image buffer with the specified amount of padding on the borders
+// Border padding uses reflected pixels
+static Pixel* ImageCreateBuffer(QImage *image, const int& padding)
+{
+    // initialize buffer
+    int imgHeight = image->height();
+    int imgWidth = image->width();
+    int bHeight = imgHeight+(padding*2);
+    int bWidth = imgWidth+(padding*2);
+
+    Pixel *buffer = new Pixel[ bWidth * bHeight ];
+
+    // set each pixel
+    for(int r = -padding; r < (imgHeight + padding); r++)
+    {
+        for(int c = -padding; c < (imgWidth + padding); c++)
+        {
+            // find pixel in buffer that corresponds to the image
+            Pixel *p = BufferGetPixel(buffer, imgWidth, padding, r+padding, c+padding);
+
+            int row = r;
+            int col = c;
+
+            // reflect row and column entires that outside the image
+            if(row < 0) row = -row;
+            if(row >= imgHeight) row = imgHeight - (row-imgHeight) - 1;
+            if(col < 0) col = -col;
+            if(col >= imgWidth) col = imgWidth - (col-imgWidth) - 1;
+
+            // copy rgb values
+            p->r = qRed(image->pixel(col, row));
+            p->g = qGreen(image->pixel(col, row));
+            p->b = qBlue(image->pixel(col, row));
+        }
+    }
+
+    return buffer;
+}
+
+// Convert the pixel buffer back into the original image
+// Pixels outside the 0-255 range are truncated
+static void ImageConvertBuffer(QImage *image, Pixel *buffer, const int& padding)
+{
+    for(int r = 0; r < image->height(); r++)
+    {
+        for(int c = 0; c < image->width(); c++)
+        {
+            // find pixel in buffer that corresponds to the image
+            Pixel *p = BufferGetPixel(buffer, image->width(), padding, r+padding, c+padding);
+
+            // convert to integer value and truncate
+            int red = (int)floor(p->r + 0.5);
+            int green = (int)floor(p->g + 0.5);
+            int blue = (int)floor(p->b + 0.5);
+            red = std::max(red,0);
+            red = std::min(red,255);
+            green = std::max(green,0);
+            green = std::min(green,255);
+            blue = std::max(blue,0);
+            blue = std::min(blue,255);
+
+            // set pixel
+            image->setPixel(c, r, qRgb(red, green, blue));
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// KERNEL METHODS
+// ----------------------------------------------------------------------------
+
+// Convolves two kernels together creating a new kernel
+// Both kernels must be square and have an odd size. The output kernel will be the same size as kernel 1.
+static double* KernelConvolve(const double const* k1, const int& k1size, const double const* k2, const int& k2size)
+{
+    // allocate output kernel
+    double* outKernel = new double[k1size*k1size];
+
+    int k2radius = k2size / 2;
+
+    // for each weight in k1
+    for(int r =0; r<k1size; r++)
+    {
+        for(int c = 0; c<k1size; c++)
+        {
+            double value = 0.0;
+
+            // convolve with k2 weights
+            for(int rd = -k2radius; rd<=k2radius; rd++)
+            {
+                for(int cd = -k2radius; cd<=k2radius; cd++)
+                {
+                    // find value in k1
+                    int vRow = r + rd;
+                    int vCol = c + cd;
+
+                    // if outside k1, default to value of 0.0
+                    double orgValue = 0.0;
+                    if(vRow >= 0 && vRow < k1size && vCol >= 0 && vCol < k1size)
+                    {
+                        orgValue = k1[vRow*k1size + vCol];
+                    }
+
+                    // get weight in k2
+                    double weight = k2[ (rd+k2radius)*k2size + (cd+k2radius) ];
+
+                    // add weighted value to total new value
+                    value += weight*orgValue;
+                }
+            }
+
+            // set new value in output kernel
+            outKernel[r*k1size + c] = value;
+        }
+    }
+
+    return outKernel;
+}
+
+// Build a guassian kernel with the specified sigma, radius and size
+// Size must be 2*radius+1
+static double* KernelBuildGaussian(const double& sigma, const int& radius, const int& size)
+{
+    // create kernel to convolve with the image
+    double *kernel = new double [size*size];
+
+    // compute kernel weights and z normalization
+    double znorm = 0.0;
+    for(int x=-radius; x<=radius; x++)
+    {
+        for(int y=-radius; y<=radius; y++)
+        {
+            double value = std::exp( -(std::pow((double)x,2) + std::pow((double)y,2)) / (2*std::pow(sigma,2)) );
+            kernel[(x+radius)*size+(y+radius)] = value;
+            znorm += value;
+        }
+    }
+
+    // normalize kernel
+    for(int x=-radius; x<=radius; x++)
+    {
+        for(int y=-radius; y<=radius; y++)
+        {
+            kernel[(x+radius)*size+(y+radius)] /= znorm;
+        }
+    }
+
+    return kernel;
+}
+
+// Build a horizontal/vertical gaussian kernel with the specified sigma, radius, and size
+// Size must be 2*radius+1
+static double* KernelBuildSeperableGaussian(const double& sigma, const int& radius, const int& size) 
+{
+    // create kernel
+    double *kernel = new double [size];
+
+    // compute kernel weights and z normalization
+    double znorm = 0.0;
+    for(int x=-radius; x<=radius; x++)
+    {
+        double value = std::exp( -std::pow((double)x,2) / (2*std::pow(sigma,2)) );
+        kernel[x+radius] = value;
+        znorm += value;
+    }
+
+    // normalize kernel
+    for(int x=-radius; x<=radius; x++)
+    {
+        kernel[x+radius] /= znorm;
+    }
+
+    return kernel;
+}
+
+// Build gaussian second derivative kernel
+// size must be 2*radius+1
+static double* KernelBuildSecDervGaussian(const double& sigma, const int& radius, const int& size) 
+{
+    // create standard guassian kernel
+    double *gKernel = KernelBuildGaussian(sigma, radius, size);
+
+    // build mexican hat (second derivative) kernel
+    int sdKernelSize = 5;
+    double *sdKernel = new double[sdKernelSize*sdKernelSize];
+
+    // initialize second derivative kernel
+    for(int i = 0; i < sdKernelSize*sdKernelSize; i++)
+    {
+        sdKernel[i] = 0.0;
+    }
+
+    // fixed values
+    sdKernel[7] = 1;
+    sdKernel[11] = 1;
+    sdKernel[12] = -4;
+    sdKernel[13] = 1;
+    sdKernel[17] = 1;
+
+    // convolve kernels
+    double* finalKernel = KernelConvolve(gKernel, size, sdKernel, sdKernelSize);
+
+    // clean up
+    delete [] gKernel;
+    delete [] sdKernel;
+
+    return finalKernel;
+}
+
+// ----------------------------------------------------------------------------
+// IMAGE METHODS
+// ----------------------------------------------------------------------------
 
 // Convert an image to grey-scale
 void MainWindow::BlackWhiteImage(QImage *image)
@@ -169,75 +544,6 @@ void MainWindow::HalfImage(QImage &image)
         }
 }
 
-// ApplyKernel
-// Applies a kernel filter to an image. The kernel can be any height and width in size.
-static void ApplyKernel(QImage *image, const double* kernel, const int kh, const int kw)
-{
-    int r, rd;      // image and kernel row
-    int c, cd;      // image and kernel col
-    QRgb pixel;     // temporary pixel
-
-    // create a buffer image so we're not reading and writing to the same image during filtering.
-    QImage buffer;
-    int width = image->width();
-    int height = image->height();
-
-    // compute horizontal and vertical kernel radius
-    int khr = kh/2;
-    int kwr = kw/2;
-
-    // create an image of size (w + kernel width, h + kernel height) with black borders.
-    // could be improved by filling the pixels using a different padding technique (reflected, fixed, etc.)
-    buffer = image->copy(-kwr, -khr, width + kw, height + kh);
-
-    // for each pixel in the image
-    for(r=0;r<height;r++)
-    {
-        for(c=0;c<width;c++)
-        {
-            double rgb[3];
-
-            rgb[0] = 0.0;
-            rgb[1] = 0.0;
-            rgb[2] = 0.0;
-
-            // convolve the kernel at each pixel
-            for(rd=-khr;rd<=khr;rd++)
-            {
-                for(cd=-kwr;cd<=kwr;cd++)
-                {
-                     // get the pixel value
-                     pixel = buffer.pixel(c + cd + kwr, r + rd + khr);
-
-                     // get the value of the kernel
-                     double weight = kernel[(rd + khr)*kw + cd + kwr];
-
-                     rgb[0] += weight*(double) qRed(pixel);
-                     rgb[1] += weight*(double) qGreen(pixel);
-                     rgb[2] += weight*(double) qBlue(pixel);
-                }
-            }
-
-            // store mean pixel in the image to be returned.
-            image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
-        }
-    }
-}
-
-// Add Image Offset
-// Add a color offset to all pixels
-static void AddImageOffset(QImage *image, QRgb offset)
-{
-    for(int c = 0; c < image->width(); c++)
-    {
-        for(int r = 0; r < image->height(); r++)
-        {
-            QRgb pixel = image->pixel(c, r);
-            image->setPixel( c, r, qRgb(qRed(pixel)+qRed(offset), qGreen(pixel)+qRed(offset), qBlue(pixel)+qBlue(offset)) );
-        }
-    }
-}
-
 // Gaussian Blur Image
 // Create kernel based on gaussian equation and interate through each pixel in the image
 // blurring it with other pixels nearby.
@@ -250,39 +556,25 @@ void MainWindow::GaussianBlurImage(QImage *image, double sigma)
     int size = 2*radius + 1;
 
     // create kernel to convolve with the image
-    double *kernel = new double [size*size];
+    double *kernel = KernelBuildGaussian(sigma, radius, size);
 
-    // compute kernel weights and z normalization
-    double znorm = 0.0;
-    for(x=-radius; x<=radius; x++)
-    {
-        for(y=-radius; y<=radius; y++)
-        {
-            double value = std::exp( -(std::pow((double)x,2) + std::pow((double)y,2)) / (2*std::pow(sigma,2)) );
-            kernel[(x+radius)*size+(y+radius)] = value;
-            znorm += value;
-        }
-    }
+    // create pixel buffer
+    Pixel* buffer = ImageCreateBuffer(image, radius);
 
-    // normalize kernel
-    for(x=-radius; x<=radius; x++)
-    {
-        for(y=-radius; y<=radius; y++)
-        {
-            kernel[(x+radius)*size+(y+radius)] /= znorm;
-        }
-    }
+    // apply kernel to buffer
+    BufferApplyKernel(buffer, image->width(), image->height(), radius, kernel, size, size);
 
-    // apply kernel
-    ApplyKernel(image, kernel, size, size);
+    // store buffer to image
+    ImageConvertBuffer(image, buffer, radius);
 
     // clean up
+    delete [] buffer;
     delete [] kernel;
 }
 
 // Seperable Gaussian Blur Image
-// Seperate Gaussian algorithm into horizonal and vertical components. Apply each component
-// to the image to create the same effect.
+// Seperates Gaussian algorithm into horizonal and vertical components. Apply each component
+// to the image to create the same blurring effect.
 void MainWindow::SeparableGaussianBlurImage(QImage *image, double sigma)
 {
     int x, y;
@@ -291,143 +583,160 @@ void MainWindow::SeparableGaussianBlurImage(QImage *image, double sigma)
     int radius = 3*sigma;
     int size = 2*radius + 1;
 
-    // create horizontal and vertical kernels to convolve with the image
-    double *x_kernel = new double [size];
-    double *y_kernel = new double [size];
+    // create kernels to convolve with the image
+    // the same kernel is used for horizontal and vertical convolution
+    double *kernel = KernelBuildSeperableGaussian(sigma, radius, size);
 
-    // compute horizontal kernel weights and z normalization
-    double znorm = 0.0;
-    for(x=-radius; x<=radius; x++)
-    {
-        double value = std::exp( -std::pow((double)x,2) / (2*std::pow(sigma,2)) );
-        x_kernel[x+radius] = value;
-        znorm += value;
-    }
+    // create pixel buffer
+    Pixel* buffer = ImageCreateBuffer(image, radius);
 
-    // normalize horizontal kernel
-    for(x=-radius; x<=radius; x++)
-    {
-        x_kernel[x+radius] /= znorm;
-    }
+    // apply kernel to buffer in both horizonal and vertical directions
+    BufferApplyKernel(buffer, image->width(), image->height(), radius, kernel, 1, size);
+    BufferApplyKernel(buffer, image->width(), image->height(), radius, kernel, size, 1);
 
-    // compute vertical kernel weights and z normalization
-    znorm = 0.0;
-    for(y=-radius; y<=radius; y++)
-    {
-        double value = std::exp( -std::pow((double)y,2) / (2*std::pow(sigma,2)) );
-        y_kernel[y+radius] = value;
-        znorm += value;
-    }
-
-    // normalize vertical kernel
-    for(y=-radius; y<=radius; y++)
-    {
-        y_kernel[y+radius] /= znorm;
-    }
-
-    // apply horizonal and then vertical kernels
-    ApplyKernel(image, x_kernel, 1, size);
-    ApplyKernel(image, y_kernel, size, 1);
+    // store buffer to image
+    ImageConvertBuffer(image, buffer, radius);
 
     // clean up
-    delete [] x_kernel;
-    delete [] y_kernel;
+    delete [] buffer;
+    delete [] kernel;
 }
 
 // FirstDerivImage
-// Compute first derivative guassian on the image.
+// Compute first derivative guassian on the image. The first derivative is created by
+// computing and applying a horizontal kernel and then blurring with the guassian.
 void MainWindow::FirstDerivImage(QImage *image, double sigma)
 {
-    int x;
-
     // kernel radius and size
     int radius = 3*sigma;
     int size = 2*radius + 1;
 
+    // create the seperable guassian kernel
+    double* gKernel = KernelBuildSeperableGaussian(sigma, radius, size);
+
     // create first derivative horizontal to convolve with the image
-    double *x_kernel = new double [size];
+    double* dKernel = new double[size];
 
     // compute horizontal first derivative kernel weights
-    for(x=-radius; x<=radius; x++)
+    for(int x=-radius; x<=radius; x++)
     {
         // first derivate equation
         // ( x / sigma^2 ) * ( e ^ (-x^2 / 2*sigma^2) )
         double value = (x / (std::pow(sigma,2))) * (std::exp(-std::pow((double)x,2) / (2*std::pow(sigma,2))));
-        x_kernel[x+radius] = value;
+        dKernel[x+radius] = value;
     }
 
-    // apply horizonal kernel
-    ApplyKernel(image, x_kernel, 1, size);
+    // create pixel buffer
+    Pixel* buffer = ImageCreateBuffer(image, radius);
 
-    // add image offsets for negative values
-    AddImageOffset(image, qRgb(128, 128, 128));
+    // apply first derivative kernel in horizonal direction
+    BufferApplyKernel(buffer, image->width(), image->height(), radius, dKernel, 1, size);
 
-    // gaussian blur
-    SeparableGaussianBlurImage(image, sigma);
-    
+    // apply seperable gaussian kernel to buffer in both horizonal and vertical directions
+    BufferApplyKernel(buffer, image->width(), image->height(), radius, gKernel, 1, size);
+    BufferApplyKernel(buffer, image->width(), image->height(), radius, gKernel, size, 1);
+
+    // add image offset for negative values
+    BufferApplyOffset(buffer, image->width(), image->height(), radius, qRgb(128, 128, 128));
+
+    // store buffer to image
+    ImageConvertBuffer(image, buffer, radius);
+   
     // clean up
-    delete [] x_kernel;
+    delete [] buffer;
+    delete [] gKernel;
+    delete [] dKernel;
 }
 
 // SecondDerivImage
-// Compute guassian second derivative on the image
+// Compute guassian second derivative on the image. The second derivative kernel is computed
+// in both directions and blurred with the guassian.
 void MainWindow::SecondDerivImage(QImage *image, double sigma)
 {
-    int x, y;
-
     // kernel radius and size
     int radius = 3*sigma;
     int size = 2*radius + 1;
 
+    // create the seperable guassian kernel
+    double* gKernel = KernelBuildSeperableGaussian(sigma, radius, size);
+
     // create second derivative kernel to convolve with the image
-    double *kernel = new double[size];
+    double *sdKernel = new double[5*5];
 
     // compute second derivative kernel weights
-    for(x=-radius; x<=radius; x++)
-    {
-        // second derivate equation
-        // ( ( (x^2 - sigma^2) / 2*sigma^2 ) * ( e ^ (-x^2 / 2*sigma^2) )
-        double value = ((std::pow((double)x,2) - std::pow(sigma,2)) / (2*std::pow(sigma,2))) * (std::exp(-std::pow((double)x,2) / (2*std::pow(sigma,2))));
-        kernel[x+radius] = value;
-    }
+    //for(int x=-radius; x<=radius; x++)
+    //{
+    //    // second derivate equation
+    //    // ( ( (x^2 - sigma^2) / 2*sigma^2 ) * ( e ^ (-x^2 / 2*sigma^2) )
+    //    double value = ((std::pow((double)x,2) - std::pow(sigma,2)) / (2*std::pow(sigma,2))) * (std::exp(-std::pow((double)x,2) / (2*std::pow(sigma,2))));
+    //    sdKernel[x+radius] = value;
+    //}
 
-    // create temporary image copies
-    QImage *hImage = new QImage(*image);
-    QImage *vImage = new QImage(*image);
+    //for(int x=-radius; x<=radius; x++)
+    //{
+    //    for(int y=-radius; y<=radius; y++)
+    //    {
+    //        double value = (1/std::pow(sigma,3))*(2-((std::pow((double)x,2)+std::pow((double)y,2))/(2*std::pow(sigma,2))))*
+    //            std::exp( -(std::pow((double)x,2) + std::pow((double)y,2)) / (2*std::pow(sigma,2)) );
+    //        sdKernel[(x+radius)*size+(y+radius)] = value;
+    //    }
+    //}
 
-    // apply kernel in horizonal direction
-    ApplyKernel(hImage, kernel, 1, size);
+    double *kernel = KernelBuildSecDervGaussian(sigma, radius, size);
 
-    // apply kernel in vertical direction
-    ApplyKernel(vImage, kernel, size, 1);
+    // create pixel buffer
+    Pixel* buffer = ImageCreateBuffer(image, radius);
 
-    // merge horizontal and vertical images
-    for(int c = 0; c < image->width(); c++)
-    {
-        for(int r = 0; r < image->height(); r++)
-        {
-            QRgb hPixel = hImage->pixel(c, r);
-            QRgb vPixel = vImage->pixel(c, r);
-            image->setPixel( c, r, hPixel + vPixel );
-        }
-    }
+    // apply second derivative kernel
+    BufferApplyKernel(buffer, image->width(), image->height(), radius, kernel, size, size);
+    //BufferApplyKernel(buffer, image->width(), image->height(), radius, sdKernel, size, 1);
 
-    delete hImage;
-    delete vImage;
+    // apply seperable gaussian kernel to buffer in both horizonal and vertical directions
+    //BufferApplyKernel(buffer, image->width(), image->height(), radius, gKernel, 1, size);
+    //BufferApplyKernel(buffer, image->width(), image->height(), radius, gKernel, size, 1);
 
-    // add image offsets for negative values
-    AddImageOffset(image, qRgb(128, 128, 128));
+    // add image offset for negative values
+    BufferApplyOffset(buffer, image->width(), image->height(), radius, qRgb(128, 128, 128));
 
-    // gaussian blur
-    SeparableGaussianBlurImage(image, sigma);
-    
+    // store buffer to image
+    ImageConvertBuffer(image, buffer, radius);
+
     // clean up
-    delete [] kernel;
+    delete [] buffer;
+    delete [] gKernel;
+    delete [] sdKernel;
 }
 
+// SharpenImage
+// Sharpen image by subtracting second derivative from original image
 void MainWindow::SharpenImage(QImage *image, double sigma, double alpha)
 {
-    // Add your code here.  It's probably easiest to call SecondDerivImage as a helper function.
+    // kernel radius and size
+    int radius = 3*sigma;
+    int size = 2*radius + 1;
+
+    // create second derivative pixel buffer
+    Pixel* sdBuffer = ImageCreateBuffer(image, radius);
+
+    // create second derivative kernel
+    double *kernel = KernelBuildSecDervGaussian(sigma, radius, size);
+
+    // apply second derivative kernel
+    BufferApplyKernel(sdBuffer, image->width(), image->height(), radius, kernel, size, size);
+
+
+    // create new pixel buffer
+    Pixel* buffer = ImageCreateBuffer(image, radius);
+
+    // subtract second derivative from buffer
+    BufferAddBuffer(buffer, image->width(), image->height(), radius, sdBuffer);
+
+    // store buffer to image
+    ImageConvertBuffer(image, buffer, radius);
+
+    delete [] kernel;
+    delete [] sdBuffer;
+    delete [] buffer;
 }
 
 void MainWindow::BilateralImage(QImage *image, double sigmaS, double sigmaI)
