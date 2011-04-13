@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+
 #include <QtGui>
 
 static const QSize resultSize(640, 480);
@@ -32,6 +33,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->peaksButton, SIGNAL(clicked()), this, SLOT(FindPeaksImage()));
     connect(ui->houghButton, SIGNAL(clicked()), this, SLOT(HoughImage()));
     connect(ui->crazyButton, SIGNAL(clicked()), this, SLOT(CrazyImage()));
+    connect(ui->lastKernelButton, SIGNAL(clicked()), this, SLOT(LastKernelImage()));
 
     connect(ui->actionOpen, SIGNAL(triggered()), this, SLOT(OpenImage()));
     connect(ui->zoomSlider, SIGNAL(valueChanged(int)), this, SLOT(Zoom(int)));
@@ -401,6 +403,13 @@ void MainWindow::BilateralImage()
     double sigmaI = ui->bilateralSigmaISpinBox->value();
 
     BilateralImage(&outImage, sigmaS, sigmaI);
+
+    DrawDisplayImage();
+}
+
+void MainWindow::LastKernelImage()
+{
+    LastKernelImage(&outImage);
 
     DrawDisplayImage();
 }

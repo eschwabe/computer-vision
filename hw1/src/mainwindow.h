@@ -53,6 +53,7 @@ private:
 
     void BilinearInterpolation(QImage *image, double x, double y, double rgb[3]);
 
+    void LastKernelImage(QImage *image);
 
 private slots:
     void OpenImage();
@@ -78,6 +79,7 @@ private slots:
     void MedianImage();
     void HoughImage();
     void CrazyImage();
+    void LastKernelImage();
 
 };
 

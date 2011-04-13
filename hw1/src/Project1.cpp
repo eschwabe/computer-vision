@@ -3,6 +3,14 @@
 #include <QtGui>
 #include <cmath>
 #include <iostream>
+#include <sstream>
+
+#define _DEBUG_ 1
+
+#ifdef _DEBUG_
+#define NOMINMAX
+#include <Windows.h>
+#endif
 
 // ----------------------------------------------------------------------------
 // This is the only file you need to change for your assignment.  The
@@ -136,9 +144,10 @@ static void BufferApplyOffset(Pixel *buffer, const int& imgWidth, const int& img
     }
 }
 
-// Adds a buffer of pixel values to an existing buffer
+// Adds a buffer of pixel values to an existing buffer multiplied by alpha
 // Buffers must be the exact same size
-static void BufferAddBuffer(Pixel *buffer, const int& imgWidth, const int& imgHeight, const int& padding, Pixel *vBuffer)
+static void BufferAddBuffer(Pixel *buffer, const int& imgWidth, const int& imgHeight, const int& padding, 
+    Pixel *addBuffer, const double& alpha)
 {
     // compute size
     int bWidth = imgWidth+(padding*2);
@@ -149,17 +158,18 @@ static void BufferAddBuffer(Pixel *buffer, const int& imgWidth, const int& imgHe
         for(int c = 0; c < bWidth; c++)
         {
             Pixel* p = BufferGetPixel(buffer, imgWidth, padding, r, c);
-            Pixel* vp = BufferGetPixel(buffer, imgWidth, padding, r, c);
-            p->r += vp->r;
-            p->g += vp->g;
-            p->b += vp->b;
+            Pixel* vp = BufferGetPixel(addBuffer, imgWidth, padding, r, c);
+            p->r += vp->r*alpha;
+            p->g += vp->g*alpha;
+            p->b += vp->b*alpha;
         }
     }
 }
 
-// Subtracts a buffer of pixel values from an existing buffer
+// Subtracts a buffer of pixel values from an existing buffer multiplied by alpha
 // Buffers must be the exact same size
-static void BufferSubtractBuffer(Pixel *buffer, const int& imgWidth, const int& imgHeight, const int& padding, Pixel *vBuffer)
+static void BufferSubtractBuffer(Pixel *buffer, const int& imgWidth, const int& imgHeight, const int& padding, 
+    Pixel *subBuffer, const double& alpha)
 {
     // compute size
     int bWidth = imgWidth+(padding*2);
@@ -170,10 +180,10 @@ static void BufferSubtractBuffer(Pixel *buffer, const int& imgWidth, const int& 
         for(int c = 0; c < bWidth; c++)
         {
             Pixel* p = BufferGetPixel(buffer, imgWidth, padding, r, c);
-            Pixel* vp = BufferGetPixel(buffer, imgWidth, padding, r, c);
-            p->r -= vp->r;
-            p->g -= vp->g;
-            p->b -= vp->b;
+            Pixel* vp = BufferGetPixel(subBuffer, imgWidth, padding, r, c);
+            p->r -= vp->r*alpha;
+            p->g -= vp->g*alpha;
+            p->b -= vp->b*alpha;
         }
     }
 }
@@ -245,6 +255,29 @@ static void ImageConvertBuffer(QImage *image, Pixel *buffer, const int& padding)
     }
 }
 
+// Convert a kernel into an image
+// Kernel weights are multipled to make more visable. Image is assumed to be large enough.
+static void ImageConvertKernel(QImage* image, double* kernel, const int& size)
+{
+    // clear image
+    image->fill(qRgb(255, 255, 255));
+
+    // output kernel
+    for(int r = 0; r < size; r++)
+    {
+        for(int c = 0; c < size; c++)
+        {
+            // convert to integer value and truncate
+            int color = (int)floor( (kernel[(r*size)+c]*2000) + 128);
+            color = std::max(color,0);
+            color = std::min(color,255);
+
+            // set pixel
+            image->setPixel(c+10, r+10, qRgb(color, color, color));
+        }
+    }
+}
+
 // ----------------------------------------------------------------------------
 // KERNEL METHODS
 // ----------------------------------------------------------------------------
@@ -297,6 +330,33 @@ static double* KernelConvolve(const double const* k1, const int& k1size, const d
     return outKernel;
 }
 
+// Normalize kernel values so the sum of the absolute values is 1
+// Kernel must be square in shape
+static void KernelNormalize(double* kernel, const int& size)
+{
+    double norm = 0.0;
+
+    // compute normal
+    for(int i=0; i<size*size; i++)
+    {
+        norm += std::abs(kernel[i]);
+    }
+
+    // normalize kernel
+    double net = 0.0;
+    for(int i=0; i<size*size; i++)
+    {
+        kernel[i] /= norm;
+        net += kernel[i];
+    }
+
+#ifdef _DEBUG_
+    std::stringstream s;
+    s << "Net: " << net << std::endl;
+    OutputDebugStringA(s.str().c_str());
+#endif
+}
+
 // Build a guassian kernel with the specified sigma, radius and size
 // Size must be 2*radius+1
 static double* KernelBuildGaussian(const double& sigma, const int& radius, const int& size)
@@ -304,26 +364,18 @@ static double* KernelBuildGaussian(const double& sigma, const int& radius, const
     // create kernel to convolve with the image
     double *kernel = new double [size*size];
 
-    // compute kernel weights and z normalization
-    double znorm = 0.0;
+    // compute kernel weights
     for(int x=-radius; x<=radius; x++)
     {
         for(int y=-radius; y<=radius; y++)
         {
             double value = std::exp( -(std::pow((double)x,2) + std::pow((double)y,2)) / (2*std::pow(sigma,2)) );
             kernel[(x+radius)*size+(y+radius)] = value;
-            znorm += value;
         }
     }
 
-    // normalize kernel
-    for(int x=-radius; x<=radius; x++)
-    {
-        for(int y=-radius; y<=radius; y++)
-        {
-            kernel[(x+radius)*size+(y+radius)] /= znorm;
-        }
-    }
+    // normalize
+    KernelNormalize(kernel, size);
 
     return kernel;
 }
@@ -370,7 +422,7 @@ static double* KernelBuildSecDervGaussianApprox(const double& sigma, const int& 
         sdKernel[i] = 0.0;
     }
 
-    // fixed values
+    // fixed 2nd derivate guassian approximation
     sdKernel[7] = 1;
     sdKernel[11] = 1;
     sdKernel[12] = -4;
@@ -379,6 +431,9 @@ static double* KernelBuildSecDervGaussianApprox(const double& sigma, const int& 
 
     // convolve kernels
     double* finalKernel = KernelConvolve(gKernel, size, sdKernel, sdKernelSize);
+
+    // normalize kernel
+    KernelNormalize(finalKernel, size);
 
     // clean up
     delete [] gKernel;
@@ -687,9 +742,6 @@ void MainWindow::SecondDerivImage(QImage *image, double sigma)
     int radius = 3*sigma;
     int size = 2*radius + 1;
 
-    // create the seperable guassian kernel
-    double* gKernel = KernelBuildGaussian(sigma, radius, size);
-
     // create guassian second derivative kernel
     double *kernel = KernelBuildSecDervGaussianApprox(sigma, radius, size);
     
@@ -699,10 +751,6 @@ void MainWindow::SecondDerivImage(QImage *image, double sigma)
     // apply second derivative kernel
     BufferApplyKernel(buffer, image->width(), image->height(), radius, kernel, size, size);
 
-    // apply seperable gaussian kernel to buffer in both horizonal and vertical directions
-    //BufferApplyKernel(buffer, image->width(), image->height(), radius, gKernel, size, size);
-    //BufferApplyKernel(buffer, image->width(), image->height(), radius, gKernel, size, 1);
-
     // add image offset for negative values
     BufferApplyOffset(buffer, image->width(), image->height(), radius, qRgb(128, 128, 128));
 
@@ -711,7 +759,6 @@ void MainWindow::SecondDerivImage(QImage *image, double sigma)
 
     // clean up
     delete [] buffer;
-    delete [] gKernel;
     delete [] kernel;
 }
 
@@ -727,17 +774,16 @@ void MainWindow::SharpenImage(QImage *image, double sigma, double alpha)
     Pixel* sdBuffer = ImageCreateBuffer(image, radius);
 
     // create second derivative kernel
-    double *kernel = KernelBuildSecDervGaussian(sigma, radius, size);
+    double *kernel = KernelBuildSecDervGaussianApprox(sigma, radius, size);
 
     // apply second derivative kernel
     BufferApplyKernel(sdBuffer, image->width(), image->height(), radius, kernel, size, size);
 
-
     // create new pixel buffer
     Pixel* buffer = ImageCreateBuffer(image, radius);
 
-    // subtract second derivative from buffer
-    BufferAddBuffer(buffer, image->width(), image->height(), radius, sdBuffer);
+    // add second derivative from buffer
+    BufferSubtractBuffer(buffer, image->width(), image->height(), radius, sdBuffer, alpha);
 
     // store buffer to image
     ImageConvertBuffer(image, buffer, radius);
@@ -965,4 +1011,9 @@ void MainWindow::HoughImage(QImage *image)
 void MainWindow::CrazyImage(QImage *image)
 {
     // Add your code here
+}
+
+void MainWindow::LastKernelImage(QImage *image)
+{
+
 }
