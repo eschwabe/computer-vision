@@ -32,7 +32,7 @@ struct Pixel {
 // Compute pixel magnitude
 static double PixelMagnitude(const Pixel const *p)
 {
-    double mag = (p->r + p->g + p->b) / (3*255);
+    double mag = (p->r + p->g + p->b) / (3);
     return mag;
 }
 
@@ -863,11 +863,11 @@ void MainWindow::BilateralImage(QImage *image, double sigmaS, double sigmaI)
                 for(int cd=-radius;cd<=radius;cd++)
                 {
                     // find convolution pixel
-                    Pixel* convPixel = BufferGetPixel(copyBuffer, image->width(), radius, rd+radius, cd+radius);
+                    Pixel* convPixel = BufferGetPixel(copyBuffer, image->width(), radius, r+rd+radius, c+cd+radius);
 
                     // compute range filter (intensity)
                     // pixel intensity calculation may not be correct
-                    double range = std::exp( std::pow( PixelMagnitude(orgPixel)-PixelMagnitude(convPixel), 2) / (2*std::pow(sigmaI,2)) );
+                    double range = std::exp( -std::pow( PixelMagnitude(orgPixel)-PixelMagnitude(convPixel), 2) / (2*std::pow(sigmaI,2)) );
 
                     // domain filter (guassian)
                     double domain = std::exp( -(std::pow((double)rd,2) + std::pow((double)cd,2)) / (2*std::pow(sigmaS,2)) );
@@ -876,9 +876,9 @@ void MainWindow::BilateralImage(QImage *image, double sigmaS, double sigmaI)
                     double weight = range*domain;
                     norm += weight;
 
-                    rgb[0] += orgPixel->r*weight;
-                    rgb[1] += orgPixel->g*weight;
-                    rgb[2] += orgPixel->b*weight;
+                    rgb[0] += convPixel->r*weight;
+                    rgb[1] += convPixel->g*weight;
+                    rgb[2] += convPixel->b*weight;
                 }
             }
 
@@ -1058,9 +1058,67 @@ void MainWindow::HoughImage(QImage *image)
     // Add your code here
 }
 
+// Crazy filter
+// Modification of the bilaterial blurring filter
 void MainWindow::CrazyImage(QImage *image)
 {
-    // Add your code here
+    double sigmaS = 1.0;
+    double sigmaI = 20.0;
+    int radius = 3*sigmaS;
+
+    // create pixel buffer copy
+    Pixel* copyBuffer = ImageCreateBuffer(image, radius);
+    Pixel* outBuffer = ImageCreateBuffer(image, radius);
+
+    // compute each pixel
+    for(int r = 0; r <image->height(); r++)
+    {
+        for(int c = 0; c <image->width(); c++)
+        {          
+            double norm = 0.0;
+            double rgb[3] = {0.0, 0.0, 0.0};
+
+            // find pixel
+            Pixel* orgPixel = BufferGetPixel(copyBuffer, image->width(), radius, r+radius, c+radius);
+
+            // convolve around the pixel
+            for(int rd=-radius;rd<=radius;rd++)
+            {
+                for(int cd=-radius;cd<=radius;cd++)
+                {
+                    // find convolution pixel
+                    Pixel* convPixel = BufferGetPixel(copyBuffer, image->width(), radius, r+rd+radius, c+cd+radius);
+
+                    // compute range filter (intensity)
+                    // pixel intensity calculation may not be correct
+                    double range = std::exp( std::pow( PixelMagnitude(orgPixel)-PixelMagnitude(convPixel), 2) / (2*std::pow(sigmaI,2)) );
+
+                    // domain filter (guassian)
+                    double domain = std::exp( -(std::pow((double)rd,2) + std::pow((double)cd,2)) / (2*std::pow(sigmaS,2)) );
+
+                    // compute weight, norm, rgb values
+                    double weight = range*domain;
+                    norm += weight;
+
+                    rgb[0] += convPixel->r*weight;
+                    rgb[1] += convPixel->g*weight;
+                    rgb[2] += convPixel->b*weight;
+                }
+            }
+
+            // find output pixel
+            Pixel *outPixel = BufferGetPixel(outBuffer, image->width(), radius, r+radius, c+radius);
+            outPixel->r = rgb[0] / norm;
+            outPixel->g = rgb[1] / norm;
+            outPixel->b = rgb[2] / norm;
+        }
+    }
+
+    // set output image
+    ImageConvertBuffer(image, outBuffer, radius);
+
+    delete [] copyBuffer;
+    delete [] outBuffer;
 }
 
 void MainWindow::LastKernelImage(QImage *image)
