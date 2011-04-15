@@ -30,7 +30,7 @@ struct Pixel {
 // ----------------------------------------------------------------------------
 
 // Compute pixel magnitude
-static double PixelMagnitude(const Pixel const *p)
+static double PixelMagnitude(const Pixel *p)
 {
     double mag = (p->r + p->g + p->b) / (3);
     return mag;
@@ -285,7 +285,7 @@ static void ImageConvertKernel(QImage* image, double* kernel, const int& size)
 
 // Convolves two kernels together creating a new kernel
 // Both kernels must be square and have an odd size. The output kernel will be the same size as kernel 1.
-static double* KernelConvolve(const double const* k1, const int& k1size, const double const* k2, const int& k2size)
+static double* KernelConvolve(const double * k1, const int& k1size, const double * k2, const int& k2size)
 {
     // allocate output kernel
     double* outKernel = new double[k1size*k1size];
@@ -360,7 +360,7 @@ static void KernelNormalize(double* kernel, const int& size)
 
 // Prints a kernel to the debug output
 // Kernel is assumed to be square
-static void KernelPrint(const double const* kernel, const int& size)
+static void KernelPrint(const double * kernel, const int& size)
 {
 #ifdef _DEBUG_
     for(int i = 0; i < size; i++)
@@ -897,11 +897,13 @@ void MainWindow::BilateralImage(QImage *image, double sigmaS, double sigmaI)
     delete [] outBuffer;
 }
 
-// Run the sobel operator on the image.
+// Run the sobel operator on the image. Detects the rate of change in an image
+// and displays the magnitude and orientation. The sobel operator is effectively a
+// simple edge detector.
 //
 // When displaying the orientation image I recommend the following:
 //
-// double mag; // magnitude of the gradient
+// double mag;   // magnitude of the gradient
 // double orien; // orientation of the gradient
 //
 // double red = (sin(orien) + 1.0)/2.0;
@@ -977,6 +979,9 @@ void MainWindow::SobelImage(QImage *image)
             outPixel->r = (std::sin(orientation) + 1.0) / 2.0;
             outPixel->g = (std::cos(orientation) + 1.0) / 2.0;
             outPixel->b = 1.0 - outPixel->r - outPixel->g;
+            //outPixel->r = 1.0;
+            //outPixel->g = 1.0;
+            //outPixel->b = 1.0;
 
             outPixel->r *= magnitude*4.0;
             outPixel->g *= magnitude*4.0;
@@ -993,14 +998,51 @@ void MainWindow::SobelImage(QImage *image)
     delete [] outBuffer;
 }
 
-
+// Bilinear interpolation
+// Computes the value of a pixel at a fractional position. Interpolates the pixel values
+// based on the surrounding pixels.
+// Return the RGB values for the pixel at location (x,y) in double rgb[3].
 void MainWindow::BilinearInterpolation(QImage *image, double x, double y, double rgb[3])
 {
-    // Add your code here.  Return the RGB values for the pixel at location (x,y) in double rgb[3].
+    // initialize rgb to black
+    rgb[0] = 0;
+    rgb[1] = 0;
+    rgb[2] = 0;
+   
+    // compute base pixel
+    int baseX = (int)x;
+    int baseY = (int)y;
+
+    // check if pixels in range
+    if( x >= 0 && (x+1) < image->width() && y >= 0 && (y+1) < image->height() )
+    {
+        // compute weight values
+        double a = x-baseX;
+        double b = y-baseY;
+
+        // find pixels
+        QRgb pixelXY = image->pixel(x,y);
+        QRgb pixelX1Y = image->pixel(x+1,y);
+        QRgb pixelXY1 = image->pixel(x,y+1);
+        QRgb pixelX1Y1 = image->pixel(x+1,y+1);
+
+        // compute interpolated pixel
+        // f (x + a, y + b) = (1 - a)(1 - b) f (x, y) + a(1 - b) f (x + 1, y) + (1 - a)b f (x,y + 1) + ab f (x + 1, y + 1)
+        rgb[0] = ((1-a)*(1-b)*qRed(pixelXY)) + (a*(1-b)*qRed(pixelX1Y)) + ((1-a)*b*qRed(pixelXY1)) + (a*b*qRed(pixelX1Y1));
+        rgb[1] = ((1-a)*(1-b)*qGreen(pixelXY)) + (a*(1-b)*qGreen(pixelX1Y)) + ((1-a)*b*qGreen(pixelXY1)) + (a*b*qGreen(pixelX1Y1));
+        rgb[2] = ((1-a)*(1-b)*qBlue(pixelXY)) + (a*(1-b)*qBlue(pixelX1Y)) + ((1-a)*b*qBlue(pixelXY1)) + (a*b*qBlue(pixelX1Y1));
+
+        // cap rgb values
+        rgb[0] = std::max(rgb[0],0.0);
+        rgb[0] = std::min(rgb[0],255.0);
+        rgb[1] = std::max(rgb[1],0.0);
+        rgb[1] = std::min(rgb[1],255.0);
+        rgb[2] = std::max(rgb[2],0.0);
+        rgb[2] = std::min(rgb[2],255.0);
+    }
 }
 
-// Here is some sample code for rotating an image.  I assume orien is in degrees.
-
+// Rotates the image by the specified angle. The orientation is specified in degrees.
 void MainWindow::RotateImage(QImage *image, double orien)
 {
     int r, c;
@@ -1039,7 +1081,6 @@ void MainWindow::RotateImage(QImage *image, double orien)
             image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
         }
     }
-
 }
 
 void MainWindow::FindPeaksImage(QImage *image, double thres)
