@@ -539,6 +539,8 @@ static double* KernelBuildSobelMagnitude()
     kernel[7] = 0.0;
     kernel[8] = 1.0;
 
+    KernelNormalize(kernel,3);
+
     return kernel;
 }
 
@@ -557,6 +559,8 @@ static double* KernelBuildSobelOrientation()
     kernel[6] = 1.0;
     kernel[7] = 2.0;
     kernel[8] = 1.0;
+
+    KernelNormalize(kernel,3);
 
     return kernel;
 }
@@ -730,8 +734,6 @@ void MainWindow::HalfImage(QImage &image)
 // blurring it with other pixels nearby.
 void MainWindow::GaussianBlurImage(QImage *image, double sigma)
 {
-    int x, y;
-
     // kernel radius and size
     int radius = 3*sigma;
     int size = 2*radius + 1;
@@ -758,8 +760,6 @@ void MainWindow::GaussianBlurImage(QImage *image, double sigma)
 // to the image to create the same blurring effect.
 void MainWindow::SeparableGaussianBlurImage(QImage *image, double sigma)
 {
-    int x, y;
-
     // kernel radius and size
     int radius = 3*sigma;
     int size = 2*radius + 1;
@@ -996,9 +996,9 @@ void MainWindow::SobelImage(QImage *image)
             outPixel->g = (std::cos(orientation) + 1.0) / 2.0;
             outPixel->b = 1.0 - outPixel->r - outPixel->g;
             
-            //outPixel->r = 1.0;
-            //outPixel->g = 1.0;
-            //outPixel->b = 1.0;
+            /*outPixel->r *= 100.0;
+            outPixel->g *= 100.0;
+            outPixel->b *= 100.0;*/
 
             outPixel->r *= magnitude*4.0;
             outPixel->g *= magnitude*4.0;
@@ -1151,33 +1151,45 @@ void MainWindow::FindPeaksImage(QImage *image, double thres)
             double orientation = std::atan(ypm / xpm);
 
             // compute perpendicular pixels
-            // x`=-sin()
-            // y`=cos()
-            double e0x = c + (-std::sin(orientation+(M_PI/2)));
-            double e0y = r + (std::cos(orientation+(M_PI/2)));
+            // distance is the number of pixels from the original pixel
+            // x`=-sin(), y`=cos()
+            double distance = 1.0;
+            double e0x = c + (-distance*std::sin(orientation+(M_PI/2)));
+            double e0y = r + (distance*std::cos(orientation+(M_PI/2)));
 
-            double e1x = c + (-std::sin(orientation-(M_PI/2)));
-            double e1y = r + (std::cos(orientation-(M_PI/2)));
+            double e1x = c + (-distance*std::sin(orientation-(M_PI/2)));
+            double e1y = r + (distance*std::cos(orientation-(M_PI/2)));
                 
             // bilinear interpolate calculated pixels
-            Pixel e0p;
-            Pixel e1p;
-            BilinearInterpolation(magBuffer, image->width(), image->height(), radius, e0x, e0y, &e0p);
-            BilinearInterpolation(magBuffer, image->width(), image->height(), radius, e1x, e1y, &e1p);
+            Pixel e0xp;
+            Pixel e0yp;
+            Pixel e1xp;
+            Pixel e1yp;
+            BilinearInterpolation(magBuffer, image->width(), image->height(), radius, e0x, e0y, &e0xp);
+            BilinearInterpolation(orienBuffer, image->width(), image->height(), radius, e0x, e0y, &e0yp);
+            BilinearInterpolation(magBuffer, image->width(), image->height(), radius, e1x, e1y, &e1xp);
+            BilinearInterpolation(orienBuffer, image->width(), image->height(), radius, e1x, e1y, &e1yp);
 
-            // compute magnitude
-            double e0xm = PixelMagnitude(&e0p);
-            double e1xm = PixelMagnitude(&e1p);
-            double e0mag = std::sqrt(std::pow(e0xm,2) + std::pow(ypm,2));
-            double e1mag = std::sqrt(std::pow(e1xm,2) + std::pow(ypm,2));
+            // compute magnitudes
+            double e0xm = PixelMagnitude(&e0xp);
+            double e0ym = PixelMagnitude(&e0yp);
+            double e1xm = PixelMagnitude(&e1xp);
+            double e1ym = PixelMagnitude(&e1yp);
 
-            // set output pixel
-            QRgb outPixel = qRgb(0,0,0);
+            double e0mag = std::sqrt(std::pow(e0xm,2) + std::pow(e0ym,2));
+            double e1mag = std::sqrt(std::pow(e1xm,2) + std::pow(e1ym,2));
+
+            // set output pixel if magnitude is greater than thresholds
             if( magnitude >= e0mag && magnitude >= e1mag && magnitude >= thres )
             {
-               outPixel = qRgb(255,255,255);
-            }
-            image->setPixel(c, r, qRgb((int) floor(qRed(outPixel) + 0.5), (int) floor(qGreen(outPixel) + 0.5), (int) floor(qBlue(outPixel) + 0.5)));
+               QRgb outPixel = qRgb(255,255,255);
+               image->setPixel(c, r, outPixel);
+
+               // testing: display perpendicular pixels
+               /*QRgb outPerpPixel = qRgb(128, 128, 128);
+               image->setPixel(e0x, e0y, outPerpPixel);
+               image->setPixel(e1x, e1y, outPerpPixel);*/
+            } 
         }
     }
 }
