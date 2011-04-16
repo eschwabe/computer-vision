@@ -18,13 +18,6 @@
 // other files control the UI (in case you want to make changes.)
 // ----------------------------------------------------------------------------
 
-// Pixel
-struct Pixel {
-    double r;
-    double g;
-    double b;
-};
-
 // ----------------------------------------------------------------------------
 // HELPER METHODS
 // ----------------------------------------------------------------------------
@@ -368,9 +361,9 @@ static void KernelPrint(const double * kernel, const int& size)
         for(int j = 0; j < size; j++)
         {
             std::stringstream s;
-            s.width(9);
-            s.precision(4);
-            s << std::fixed << kernel[(size*i)+j] << "  ";
+            s.width(8);
+            s.precision(5);
+            s << std::fixed << kernel[(size*i)+j] << " ";
             OutputDebugStringA(s.str().c_str());
         }
         OutputDebugStringA("  \n");
@@ -496,6 +489,8 @@ static double* KernelBuildSecDervGaussianApprox(const double& sigma, const int& 
     // normalize kernel
     KernelNormalize(finalKernel, size);
 
+    //KernelPrint(finalKernel, size);
+
     // clean up
     delete [] gKernel;
     delete [] sdKernel;
@@ -522,6 +517,46 @@ static double* KernelBuildSecDervGaussian(const double& sigma, const int& radius
             kernel[(x+radius)*size+(y+radius)] = value;
         }
     }
+
+    return kernel;
+}
+
+// Build sobel magnitude kernel
+// Size is ignored. 3x3 returned.
+static double* KernelBuildSobelMagnitude() 
+{
+    // create kernel
+    double *kernel = new double[3*3];
+
+    // set kernel values
+    kernel[0] = -1.0;
+    kernel[1] = 0.0;
+    kernel[2] = 1.0;
+    kernel[3] = -2.0;
+    kernel[4] = 0.0;
+    kernel[5] = 2.0;
+    kernel[6] = -1.0;
+    kernel[7] = 0.0;
+    kernel[8] = 1.0;
+
+    return kernel;
+}
+
+// Build sobel orientation kernel
+// Size is ignored. 3x3 returned.
+static double* KernelBuildSobelOrientation()
+{
+    double *kernel = new double[3*3];
+
+    kernel[0] = -1.0;
+    kernel[1] = -2.0;
+    kernel[2] = -1.0;
+    kernel[3] = 0.0;
+    kernel[4] = 0.0;
+    kernel[5] = 0.0;
+    kernel[6] = 1.0;
+    kernel[7] = 2.0;
+    kernel[8] = 1.0;
 
     return kernel;
 }
@@ -800,6 +835,7 @@ void MainWindow::SecondDerivImage(QImage *image, double sigma)
 
     // store buffer to image
     ImageConvertBuffer(image, buffer, radius);
+    //ImageConvertKernel(image, kernel, size);
 
     // clean up
     delete [] buffer;
@@ -927,47 +963,27 @@ void MainWindow::SobelImage(QImage *image)
     int size = 2*radius + 1;
 
     // create buffers
-    Pixel *xBuffer = ImageCreateBuffer(image, radius);
-    Pixel *yBuffer = ImageCreateBuffer(image, radius);
+    Pixel *magBuffer = ImageCreateBuffer(image, radius);
+    Pixel *orienBuffer = ImageCreateBuffer(image, radius);
 
     // create kernels
-    double *xKernel = new double[size*size];
-    double *yKernel = new double[size*size];
-
-    // set kernel values
-    xKernel[0] = -1.0;
-    xKernel[1] = 0.0;
-    xKernel[2] = 1.0;
-    xKernel[3] = -2.0;
-    xKernel[4] = 0.0;
-    xKernel[5] = 2.0;
-    xKernel[6] = -1.0;
-    xKernel[7] = 0.0;
-    xKernel[8] = 1.0;
-
-    yKernel[0] = -1.0;
-    yKernel[1] = -2.0;
-    yKernel[2] = -1.0;
-    yKernel[3] = 0.0;
-    yKernel[4] = 0.0;
-    yKernel[5] = 0.0;
-    yKernel[6] = 1.0;
-    yKernel[7] = 2.0;
-    yKernel[8] = 1.0;
+    double *magKernel = KernelBuildSobelMagnitude();
+    double *orienKernel = KernelBuildSobelOrientation();
 
     // apply kernels
-    BufferApplyKernel(xBuffer, image->width(), image->height(), radius, xKernel, size, size);
-    BufferApplyKernel(yBuffer, image->width(), image->height(), radius, yKernel, size, size);
+    BufferApplyKernel(magBuffer, image->width(), image->height(), radius, magKernel, size, size);
+    BufferApplyKernel(orienBuffer, image->width(), image->height(), radius, orienKernel, size, size);
 
     // create output buffer
     Pixel *outBuffer = ImageCreateBuffer(image, radius);
 
+    // compute pixel values based on buffers
     for(int r = 0; r <image->height(); r++)
     {
         for(int c = 0; c <image->width(); c++)
         {
-            Pixel *xp = BufferGetPixel(xBuffer, image->width(), radius, r+radius, c+radius);
-            Pixel *yp = BufferGetPixel(yBuffer, image->width(), radius, r+radius, c+radius);
+            Pixel *xp = BufferGetPixel(magBuffer, image->width(), radius, r+radius, c+radius);
+            Pixel *yp = BufferGetPixel(orienBuffer, image->width(), radius, r+radius, c+radius);
             
             double xpm = PixelMagnitude(xp);
             double ypm = PixelMagnitude(yp);
@@ -979,6 +995,7 @@ void MainWindow::SobelImage(QImage *image)
             outPixel->r = (std::sin(orientation) + 1.0) / 2.0;
             outPixel->g = (std::cos(orientation) + 1.0) / 2.0;
             outPixel->b = 1.0 - outPixel->r - outPixel->g;
+            
             //outPixel->r = 1.0;
             //outPixel->g = 1.0;
             //outPixel->b = 1.0;
@@ -989,12 +1006,13 @@ void MainWindow::SobelImage(QImage *image)
         }
     }
 
+    // update image
     ImageConvertBuffer(image, outBuffer, radius);
 
-    delete [] xBuffer;
-    delete [] yBuffer;
-    delete [] xKernel;
-    delete [] yKernel;
+    delete [] magBuffer;
+    delete [] orienBuffer;
+    delete [] magKernel;
+    delete [] orienKernel;
     delete [] outBuffer;
 }
 
@@ -1002,43 +1020,44 @@ void MainWindow::SobelImage(QImage *image)
 // Computes the value of a pixel at a fractional position. Interpolates the pixel values
 // based on the surrounding pixels.
 // Return the RGB values for the pixel at location (x,y) in double rgb[3].
-void MainWindow::BilinearInterpolation(QImage *image, double x, double y, double rgb[3])
+void MainWindow::BilinearInterpolation(Pixel *buffer, const int& width, const int& height, const int& padding,
+    const double& x, const double& y, Pixel* p)
 {
     // initialize rgb to black
-    rgb[0] = 0;
-    rgb[1] = 0;
-    rgb[2] = 0;
+    p->r = 0;
+    p->g = 0;
+    p->b = 0;
    
     // compute base pixel
     int baseX = (int)x;
     int baseY = (int)y;
 
     // check if pixels in range
-    if( x >= 0 && (x+1) < image->width() && y >= 0 && (y+1) < image->height() )
+    if( x >= 0 && (x+1) < width && y >= 0 && (y+1) < height )
     {
         // compute weight values
         double a = x-baseX;
         double b = y-baseY;
 
         // find pixels
-        QRgb pixelXY = image->pixel(x,y);
-        QRgb pixelX1Y = image->pixel(x+1,y);
-        QRgb pixelXY1 = image->pixel(x,y+1);
-        QRgb pixelX1Y1 = image->pixel(x+1,y+1);
+        Pixel* pixelXY = BufferGetPixel(buffer, width, padding, y, x);
+        Pixel* pixelX1Y = BufferGetPixel(buffer, width, padding, y, x+1);
+        Pixel* pixelXY1 = BufferGetPixel(buffer, width, padding, y+1, x);
+        Pixel* pixelX1Y1 = BufferGetPixel(buffer, width, padding, y+1, x+1);
 
         // compute interpolated pixel
         // f (x + a, y + b) = (1 - a)(1 - b) f (x, y) + a(1 - b) f (x + 1, y) + (1 - a)b f (x,y + 1) + ab f (x + 1, y + 1)
-        rgb[0] = ((1-a)*(1-b)*qRed(pixelXY)) + (a*(1-b)*qRed(pixelX1Y)) + ((1-a)*b*qRed(pixelXY1)) + (a*b*qRed(pixelX1Y1));
-        rgb[1] = ((1-a)*(1-b)*qGreen(pixelXY)) + (a*(1-b)*qGreen(pixelX1Y)) + ((1-a)*b*qGreen(pixelXY1)) + (a*b*qGreen(pixelX1Y1));
-        rgb[2] = ((1-a)*(1-b)*qBlue(pixelXY)) + (a*(1-b)*qBlue(pixelX1Y)) + ((1-a)*b*qBlue(pixelXY1)) + (a*b*qBlue(pixelX1Y1));
+        p->r = ((1-a)*(1-b)*pixelXY->r) + (a*(1-b)*pixelX1Y->r) + ((1-a)*b*pixelXY1->r) + (a*b*pixelX1Y1->r);
+        p->g = ((1-a)*(1-b)*pixelXY->g) + (a*(1-b)*pixelX1Y->g) + ((1-a)*b*pixelXY1->g) + (a*b*pixelX1Y1->g);
+        p->b = ((1-a)*(1-b)*pixelXY->b) + (a*(1-b)*pixelX1Y->b) + ((1-a)*b*pixelXY1->b) + (a*b*pixelX1Y1->b);
 
         // cap rgb values
-        rgb[0] = std::max(rgb[0],0.0);
-        rgb[0] = std::min(rgb[0],255.0);
-        rgb[1] = std::max(rgb[1],0.0);
-        rgb[1] = std::min(rgb[1],255.0);
-        rgb[2] = std::max(rgb[2],0.0);
-        rgb[2] = std::min(rgb[2],255.0);
+        p->r = std::max(p->r,0.0);
+        p->r = std::min(p->r,255.0);
+        p->g = std::max(p->g,0.0);
+        p->g = std::min(p->g,255.0);
+        p->b = std::max(p->b,0.0);
+        p->b = std::min(p->b,255.0);
     }
 }
 
@@ -1047,47 +1066,121 @@ void MainWindow::RotateImage(QImage *image, double orien)
 {
     int r, c;
     QRgb pixel;
-    QImage buffer;
     int w = image->width();
     int h = image->height();
     double radians = -2.0*3.141*orien/360.0;
 
-    buffer = image->copy();
-
+    // create copy buffer
+    Pixel* buffer = ImageCreateBuffer(image, 0);
+    
+    // reset image
     pixel = qRgb(0, 0, 0);
     image->fill(pixel);
 
+    // rotate each pixel
     for(r=0;r<h;r++)
     {
         for(c=0;c<w;c++)
         {
-            double rgb[3];
+            Pixel p;
             double x0, y0;
             double x1, y1;
 
-            // Rotate around the center of the image.
+            // rotate around the center of the image.
             x0 = (double) (c - w/2);
             y0 = (double) (r - h/2);
 
-            // Rotate using rotation matrix
+            // rotate using rotation matrix
             x1 = x0*cos(radians) - y0*sin(radians);
             y1 = x0*sin(radians) + y0*cos(radians);
 
             x1 += (double) (w/2);
             y1 += (double) (h/2);
 
-            BilinearInterpolation(&buffer, x1, y1, rgb);
+            // interpolate
+            BilinearInterpolation(buffer, w, h, 0, x1, y1, &p);
 
-            image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
+            // set pixel
+            image->setPixel(c, r, qRgb((int) floor(p.r + 0.5), (int) floor(p.g + 0.5), (int) floor(p.b + 0.5)));
+        }
+    }
+
+    // cleanup
+    delete [] buffer;
+}
+
+// Find peaks image
+// A peak response is found by comparing a pixel’s edge magnitude to two samples perpendicular to an edge at a distance 
+// of one pixel (slide 11 in EdgeDetection), call these two samples e0 and e1.  Compute e0 and e1 using BilinearInterpolation.  
+// A pixel is a peak response if it is larger than the threshold (“thres”), e0, and e1
+void MainWindow::FindPeaksImage(QImage *image, double thres)
+{
+    // fixed radius
+    int radius = 1;
+    int size = 2*radius + 1;
+
+    // create buffers
+    Pixel *magBuffer = ImageCreateBuffer(image, radius);
+    Pixel *orienBuffer = ImageCreateBuffer(image, radius);
+
+    // create kernels
+    double *magKernel = KernelBuildSobelMagnitude();
+    double *orienKernel = KernelBuildSobelOrientation();
+
+    // apply kernels
+    BufferApplyKernel(magBuffer, image->width(), image->height(), radius, magKernel, size, size);
+    BufferApplyKernel(orienBuffer, image->width(), image->height(), radius, orienKernel, size, size);
+
+    // reset image
+    QRgb clearPixel = qRgb(0, 0, 0);
+    image->fill(clearPixel);
+
+    // check each pixel
+    for(int r = 0; r < image->height(); r++)
+    {
+        for(int c = 0; c < image->width(); c++)
+        {
+            // get magnitidue and orientation
+            Pixel *xp = BufferGetPixel(magBuffer, image->width(), radius, r+radius, c+radius);
+            Pixel *yp = BufferGetPixel(orienBuffer, image->width(), radius, r+radius, c+radius);
+            
+            double xpm = PixelMagnitude(xp);
+            double ypm = PixelMagnitude(yp);
+
+            double magnitude = std::sqrt(std::pow(xpm,2) + std::pow(ypm,2));
+            double orientation = std::atan(ypm / xpm);
+
+            // compute perpendicular pixels
+            // x`=-sin()
+            // y`=cos()
+            double e0x = c + (-std::sin(orientation+(M_PI/2)));
+            double e0y = r + (std::cos(orientation+(M_PI/2)));
+
+            double e1x = c + (-std::sin(orientation-(M_PI/2)));
+            double e1y = r + (std::cos(orientation-(M_PI/2)));
+                
+            // bilinear interpolate calculated pixels
+            Pixel e0p;
+            Pixel e1p;
+            BilinearInterpolation(magBuffer, image->width(), image->height(), radius, e0x, e0y, &e0p);
+            BilinearInterpolation(magBuffer, image->width(), image->height(), radius, e1x, e1y, &e1p);
+
+            // compute magnitude
+            double e0xm = PixelMagnitude(&e0p);
+            double e1xm = PixelMagnitude(&e1p);
+            double e0mag = std::sqrt(std::pow(e0xm,2) + std::pow(ypm,2));
+            double e1mag = std::sqrt(std::pow(e1xm,2) + std::pow(ypm,2));
+
+            // set output pixel
+            QRgb outPixel = qRgb(0,0,0);
+            if( magnitude >= e0mag && magnitude >= e1mag && magnitude >= thres )
+            {
+               outPixel = qRgb(255,255,255);
+            }
+            image->setPixel(c, r, qRgb((int) floor(qRed(outPixel) + 0.5), (int) floor(qGreen(outPixel) + 0.5), (int) floor(qBlue(outPixel) + 0.5)));
         }
     }
 }
-
-void MainWindow::FindPeaksImage(QImage *image, double thres)
-{
-    // Add your code here.
-}
-
 
 void MainWindow::MedianImage(QImage *image, int radius)
 {
@@ -1160,9 +1253,4 @@ void MainWindow::CrazyImage(QImage *image)
 
     delete [] copyBuffer;
     delete [] outBuffer;
-}
-
-void MainWindow::LastKernelImage(QImage *image)
-{
-
 }

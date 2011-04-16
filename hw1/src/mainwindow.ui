@@ -395,7 +395,7 @@
           </property>
          </spacer>
         </item>
-        <item row="20" column="0">
+        <item row="19" column="0">
          <spacer name="verticalSpacer_3">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
@@ -407,13 +407,6 @@
            </size>
           </property>
          </spacer>
-        </item>
-        <item row="19" column="0">
-         <widget class="QPushButton" name="lastKernelButton">
-          <property name="text">
-           <string>Last Kernel</string>
-          </property>
-         </widget>
         </item>
        </layout>
       </item>

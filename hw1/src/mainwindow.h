@@ -15,6 +15,14 @@ namespace Ui {
     class MainWindow;
 }
 
+// Pixel (double)
+struct Pixel {
+    double r;
+    double g;
+    double b;
+};
+
+// Main Window
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -24,6 +32,7 @@ public:
     ~MainWindow();
 
 private:
+
     Ui::MainWindow *ui;
     QImage inImage;
     QImage outImage;
@@ -51,9 +60,8 @@ private:
     void MedianImage(QImage *image, int radius);
     void RotateImage(QImage *image, double orien);
 
-    void BilinearInterpolation(QImage *image, double x, double y, double rgb[3]);
-
-    void LastKernelImage(QImage *image);
+    void BilinearInterpolation(Pixel *buffer, const int& width, const int& height, const int& padding,
+        const double& x, const double& y, Pixel* p);
 
 private slots:
     void OpenImage();
@@ -79,7 +87,6 @@ private slots:
     void MedianImage();
     void HoughImage();
     void CrazyImage();
-    void LastKernelImage();
 
 };
 
