@@ -184,7 +184,7 @@ static void BufferSubtractBuffer(Pixel *buffer, const int& imgWidth, const int& 
 
 // Creates an image buffer with the specified amount of padding on the borders
 // Border padding uses reflected pixels
-static Pixel* ImageCreateBuffer(QImage *image, const int& padding)
+static Pixel* ImageCreateBuffer(QImage *image, const int& padding, const bool& reflect=true)
 {
     // initialize buffer
     int imgHeight = image->height();
@@ -202,19 +202,31 @@ static Pixel* ImageCreateBuffer(QImage *image, const int& padding)
             // find pixel in buffer that corresponds to the image
             Pixel *p = BufferGetPixel(buffer, imgWidth, padding, r+padding, c+padding);
 
+            // initialize pixel
+            p->r = 0.0;
+            p->g = 0.0;
+            p->b = 0.0;
+
             int row = r;
             int col = c;
 
             // reflect row and column entires that outside the image
-            if(row < 0) row = -row;
-            if(row >= imgHeight) row = imgHeight - (row-imgHeight) - 1;
-            if(col < 0) col = -col;
-            if(col >= imgWidth) col = imgWidth - (col-imgWidth) - 1;
+            if(reflect == true)
+            {
+                if(row < 0) row = -row;
+                if(row >= imgHeight) row = imgHeight - (row-imgHeight) - 1;
+                if(col < 0) col = -col;
+                if(col >= imgWidth) col = imgWidth - (col-imgWidth) - 1;
+            }
 
-            // copy rgb values
-            p->r = qRed(image->pixel(col, row));
-            p->g = qGreen(image->pixel(col, row));
-            p->b = qBlue(image->pixel(col, row));
+            // check if pixels in range
+            if(row >= 0 && row < imgHeight && col >= 0 && col < imgWidth)
+            {
+                // copy rgb values
+                p->r = qRed(image->pixel(col, row));
+                p->g = qGreen(image->pixel(col, row));
+                p->b = qBlue(image->pixel(col, row));
+            }
         }
     }
 
@@ -862,7 +874,7 @@ void MainWindow::SharpenImage(QImage *image, double sigma, double alpha)
     // create new pixel buffer
     Pixel* buffer = ImageCreateBuffer(image, radius);
 
-    // add second derivative from buffer
+    // subtract second derivative from buffer
     BufferSubtractBuffer(buffer, image->width(), image->height(), radius, sdBuffer, alpha);
 
     // store buffer to image
@@ -1027,23 +1039,27 @@ void MainWindow::BilinearInterpolation(Pixel *buffer, const int& width, const in
     p->r = 0;
     p->g = 0;
     p->b = 0;
+
+    // compute buffer x,y location
+    double bufX = (x+padding);
+    double bufY = (y+padding);
    
     // compute base pixel
-    int baseX = (int)x;
-    int baseY = (int)y;
+    int baseX = (int)bufX;
+    int baseY = (int)bufY;
 
-    // check if pixels in range
-    if( x >= 0 && (x+1) < width && y >= 0 && (y+1) < height )
+    // check if pixels in range (including padding)
+    if( bufX >= 0 && (bufX+1) < (width+(padding*2)) && bufY >= 0 && (bufY+1) < (height+(padding*2)) )
     {
         // compute weight values
-        double a = x-baseX;
-        double b = y-baseY;
+        double a = bufX-baseX;
+        double b = bufY-baseY;
 
         // find pixels
-        Pixel* pixelXY = BufferGetPixel(buffer, width, padding, y, x);
-        Pixel* pixelX1Y = BufferGetPixel(buffer, width, padding, y, x+1);
-        Pixel* pixelXY1 = BufferGetPixel(buffer, width, padding, y+1, x);
-        Pixel* pixelX1Y1 = BufferGetPixel(buffer, width, padding, y+1, x+1);
+        Pixel* pixelXY = BufferGetPixel(buffer, width, padding, bufY, bufX);
+        Pixel* pixelX1Y = BufferGetPixel(buffer, width, padding, bufY, bufX+1);
+        Pixel* pixelXY1 = BufferGetPixel(buffer, width, padding, bufY+1, bufX);
+        Pixel* pixelX1Y1 = BufferGetPixel(buffer, width, padding, bufY+1, bufX+1);
 
         // compute interpolated pixel
         // f (x + a, y + b) = (1 - a)(1 - b) f (x, y) + a(1 - b) f (x + 1, y) + (1 - a)b f (x,y + 1) + ab f (x + 1, y + 1)
@@ -1068,10 +1084,11 @@ void MainWindow::RotateImage(QImage *image, double orien)
     QRgb pixel;
     int w = image->width();
     int h = image->height();
+    int padding = 1;
     double radians = -2.0*3.141*orien/360.0;
 
     // create copy buffer
-    Pixel* buffer = ImageCreateBuffer(image, 0);
+    Pixel* buffer = ImageCreateBuffer(image, padding, false);
     
     // reset image
     pixel = qRgb(0, 0, 0);
@@ -1098,7 +1115,7 @@ void MainWindow::RotateImage(QImage *image, double orien)
             y1 += (double) (h/2);
 
             // interpolate
-            BilinearInterpolation(buffer, w, h, 0, x1, y1, &p);
+            BilinearInterpolation(buffer, w, h, padding, x1, y1, &p);
 
             // set pixel
             image->setPixel(c, r, qRgb((int) floor(p.r + 0.5), (int) floor(p.g + 0.5), (int) floor(p.b + 0.5)));

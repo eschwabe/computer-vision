@@ -237,7 +237,9 @@ void MainWindow::SaveImage()
     QString fileName = QFileDialog::getSaveFileName(this, title);
 
     if (!fileName.isEmpty())
-        outImage.save(fileName);
+    {
+        outImage.save(fileName, "png", 100);
+    }
 }
 
 void MainWindow::SaveDisplayImage()
@@ -247,7 +249,7 @@ void MainWindow::SaveDisplayImage()
     QString fileName = QFileDialog::getSaveFileName(this, title);
 
     if (!fileName.isEmpty())
-        displayImage.save(fileName);
+        displayImage.save(fileName, "png", 100);
 }
 
 void MainWindow::ResetImage()
