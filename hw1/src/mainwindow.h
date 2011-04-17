@@ -61,7 +61,7 @@ private:
     void RotateImage(QImage *image, double orien);
 
     void BilinearInterpolation(Pixel *buffer, const int& width, const int& height, const int& padding,
-        const double& x, const double& y, Pixel* p);
+        const double& x, const double& y, Pixel* p, const bool& cap);
 
 private slots:
     void OpenImage();

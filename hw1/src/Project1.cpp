@@ -1033,7 +1033,7 @@ void MainWindow::SobelImage(QImage *image)
 // based on the surrounding pixels.
 // Return the RGB values for the pixel at location (x,y) in double rgb[3].
 void MainWindow::BilinearInterpolation(Pixel *buffer, const int& width, const int& height, const int& padding,
-    const double& x, const double& y, Pixel* p)
+    const double& x, const double& y, Pixel* p, const bool& cap=true)
 {
     // initialize rgb to black
     p->r = 0;
@@ -1068,12 +1068,15 @@ void MainWindow::BilinearInterpolation(Pixel *buffer, const int& width, const in
         p->b = ((1-a)*(1-b)*pixelXY->b) + (a*(1-b)*pixelX1Y->b) + ((1-a)*b*pixelXY1->b) + (a*b*pixelX1Y1->b);
 
         // cap rgb values
-        p->r = std::max(p->r,0.0);
-        p->r = std::min(p->r,255.0);
-        p->g = std::max(p->g,0.0);
-        p->g = std::min(p->g,255.0);
-        p->b = std::max(p->b,0.0);
-        p->b = std::min(p->b,255.0);
+        if(cap == true)
+        {
+            p->r = std::max(p->r,0.0);
+            p->r = std::min(p->r,255.0);
+            p->g = std::max(p->g,0.0);
+            p->g = std::min(p->g,255.0);
+            p->b = std::max(p->b,0.0);
+            p->b = std::min(p->b,255.0);
+        }
     }
 }
 
@@ -1167,46 +1170,68 @@ void MainWindow::FindPeaksImage(QImage *image, double thres)
             double magnitude = std::sqrt(std::pow(xpm,2) + std::pow(ypm,2));
             double orientation = std::atan(ypm / xpm);
 
-            // compute perpendicular pixels
-            // distance is the number of pixels from the original pixel
-            // x`=-sin(), y`=cos()
-            double distance = 1.0;
-            double e0x = c + (-distance*std::sin(orientation+(M_PI/2)));
-            double e0y = r + (distance*std::cos(orientation+(M_PI/2)));
-
-            double e1x = c + (-distance*std::sin(orientation-(M_PI/2)));
-            double e1y = r + (distance*std::cos(orientation-(M_PI/2)));
-                
-            // bilinear interpolate calculated pixels
-            Pixel e0xp;
-            Pixel e0yp;
-            Pixel e1xp;
-            Pixel e1yp;
-            BilinearInterpolation(magBuffer, image->width(), image->height(), radius, e0x, e0y, &e0xp);
-            BilinearInterpolation(orienBuffer, image->width(), image->height(), radius, e0x, e0y, &e0yp);
-            BilinearInterpolation(magBuffer, image->width(), image->height(), radius, e1x, e1y, &e1xp);
-            BilinearInterpolation(orienBuffer, image->width(), image->height(), radius, e1x, e1y, &e1yp);
-
-            // compute magnitudes
-            double e0xm = PixelMagnitude(&e0xp);
-            double e0ym = PixelMagnitude(&e0yp);
-            double e1xm = PixelMagnitude(&e1xp);
-            double e1ym = PixelMagnitude(&e1yp);
-
-            double e0mag = std::sqrt(std::pow(e0xm,2) + std::pow(e0ym,2));
-            double e1mag = std::sqrt(std::pow(e1xm,2) + std::pow(e1ym,2));
-
-            // set output pixel if magnitude is greater than thresholds
-            if( magnitude >= e0mag && magnitude >= e1mag && magnitude >= thres )
+            if(magnitude >= thres)
             {
-               QRgb outPixel = qRgb(255,255,255);
-               image->setPixel(c, r, outPixel);
+                // compute perpendicular pixels within a square
+                double pOrientation = orientation+(M_PI/2);
 
-               // testing: display perpendicular pixels
-               /*QRgb outPerpPixel = qRgb(128, 128, 128);
-               image->setPixel(e0x, e0y, outPerpPixel);
-               image->setPixel(e1x, e1y, outPerpPixel);*/
-            } 
+                // determine the side of the square
+                double absCos = std::abs(cos(pOrientation));
+	            double absSin = std::abs(sin(pOrientation));
+                double length = 0.0;
+
+                // set length of line
+	            if (absSin <= absCos)
+	            {
+		            length = 1.0 / absCos;
+	            }
+	            else
+	            {
+		            length = 1.0 / absSin;
+	            }
+
+                // compute row and column offsets
+	            double offR = cos(pOrientation)*length;
+	            double offC = sin(pOrientation)*length;
+
+                // compute new pixel locations
+                double e0x = c + offC;
+                double e0y = r - offR;
+
+                double e1x = c - offC;
+                double e1y = r + offR;
+                
+                // bilinear interpolate calculated pixels
+                Pixel e0xp;
+                Pixel e0yp;
+                Pixel e1xp;
+                Pixel e1yp;
+                BilinearInterpolation(magBuffer, image->width(), image->height(), radius, e0x, e0y, &e0xp, false);
+                BilinearInterpolation(orienBuffer, image->width(), image->height(), radius, e0x, e0y, &e0yp, false);
+                BilinearInterpolation(magBuffer, image->width(), image->height(), radius, e1x, e1y, &e1xp, false);
+                BilinearInterpolation(orienBuffer, image->width(), image->height(), radius, e1x, e1y, &e1yp, false);
+
+                // compute magnitudes
+                double e0xm = PixelMagnitude(&e0xp);
+                double e0ym = PixelMagnitude(&e0yp);
+                double e1xm = PixelMagnitude(&e1xp);
+                double e1ym = PixelMagnitude(&e1yp);
+
+                double e0mag = std::sqrt(std::pow(e0xm,2) + std::pow(e0ym,2));
+                double e1mag = std::sqrt(std::pow(e1xm,2) + std::pow(e1ym,2));
+
+                // set output pixel if magnitude is greater than perpindicular magnitudes
+                if( magnitude >= e0mag && magnitude >= e1mag )
+                {
+                   QRgb outPixel = qRgb(255,255,255);
+                   image->setPixel(c, r, outPixel);
+
+                   // testing: display perpendicular pixels
+                   /*QRgb outPerpPixel = qRgb(128, 128, 128);
+                   image->setPixel(e0x, e0y, outPerpPixel);
+                   image->setPixel(e1x, e1y, outPerpPixel);*/
+                }
+            }
         }
     }
 }
