@@ -9,3 +9,8 @@ hw1/src/ui_mainwindow.h
 hw1/src/vc100.pdb
 hw1/src/ImgFilter.sdf
 hw2/src/ImageStitcher.sdf
+hw2/src/debug/
+hw2/src/ImageStitcher.pdb
+hw2/src/ipch/
+hw2/src/ui_mainwindow.h
+hw2/src/vc100.pdb
