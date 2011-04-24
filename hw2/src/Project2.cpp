@@ -508,6 +508,8 @@ void MainWindow::SeparableGaussianBlurImage(double *image, int w, int h, double 
     // apply kernel to buffer in both horizonal and vertical directions
     BufferSingleApplyKernel(image, w, h, kernel, 1, size);
     BufferSingleApplyKernel(image, w, h, kernel, size, 1);
+
+    delete [] kernel;
 }
 
 /**
@@ -670,6 +672,7 @@ void MainWindow::HarrisCornerDetector(QImage image, double sigma, double thres, 
     delete [] buffer;
     delete [] horzBuffer;
     delete [] vertBuffer;
+    delete [] dxdyBuffer;
     delete [] harrisBuffer;
     delete [] fdKernel;
 }
