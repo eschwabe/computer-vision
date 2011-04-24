@@ -78,7 +78,7 @@ private:
                 double hom[3][3], double homInv[3][3], QImage &image1Display, QImage &image2Display);
     bool ComputeHomography(CMatches *matches, int numMatches, double h[3][3], bool isForward);
     void Project(double x1, double y1, double &x2, double &y2, double h[3][3]);
-    int ComputeInlierCount(double h[3][3], CMatches *matches, int numMatches, double inlierThreshold);
+    int ComputeInlierCount(double h[3][3], CMatches *matches, int numMatches, double inlierThreshold, CMatches** inlierMatches);
     void Stitch(QImage image1, QImage image2, double hom[3][3], double homInv[3][3], QImage &stitchedImage);
     bool BilinearInterpolation(QImage *image, double x, double y, double rgb[3]);
 

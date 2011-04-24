@@ -62,44 +62,46 @@ void MainWindow::ComputeDescriptors(QImage image, CIntPt *interestPts, int numIn
 
     // Computer descriptors from green channel
     for(r=0;r<h;r++)
+    {
         for(c=0;c<w;c++)
         {
             pixel = image.pixel(c, r);
             buffer[r*w + c] = (double) qGreen(pixel);
         }
+    }
 
-        // Blur
-        SeparableGaussianBlurImage(buffer, w, h, sigma);
+    // Blur
+    SeparableGaussianBlurImage(buffer, w, h, sigma);
 
-        // Compute the desciptor from the difference between the point sampled at its center
-        // and eight points sampled around it.
-        for(i=0;i<numInterestsPts;i++)
+    // Compute the desciptor from the difference between the point sampled at its center
+    // and eight points sampled around it.
+    for(i=0;i<numInterestsPts;i++)
+    {
+        int c = (int) interestPts[i].m_X;
+        int r = (int) interestPts[i].m_Y;
+
+        if(c >= rad && c < w - rad && r >= rad && r < h - rad)
         {
-            int c = (int) interestPts[i].m_X;
-            int r = (int) interestPts[i].m_Y;
+            double centerValue = buffer[(r)*w + c];
+            int j = 0;
 
-            if(c >= rad && c < w - rad && r >= rad && r < h - rad)
-            {
-                double centerValue = buffer[(r)*w + c];
-                int j = 0;
+            for(rd=-1;rd<=1;rd++)
+                for(cd=-1;cd<=1;cd++)
+                    if(rd != 0 || cd != 0)
+                    {
+                        interestPts[i].m_Desc[j] = buffer[(r + rd*rad)*w + c + cd*rad] - centerValue;
+                        j++;
+                    }
 
-                for(rd=-1;rd<=1;rd++)
-                    for(cd=-1;cd<=1;cd++)
-                        if(rd != 0 || cd != 0)
-                        {
-                            interestPts[i].m_Desc[j] = buffer[(r + rd*rad)*w + c + cd*rad] - centerValue;
-                            j++;
-                        }
-
-                        interestPts[i].m_DescSize = DESC_SIZE;
-            }
-            else
-            {
-                interestPts[i].m_DescSize = 0;
-            }
+                    interestPts[i].m_DescSize = DESC_SIZE;
         }
+        else
+        {
+            interestPts[i].m_DescSize = 0;
+        }
+    }
 
-        delete [] buffer;
+    delete [] buffer;
 }
 
 /**
@@ -666,18 +668,62 @@ void MainWindow::MatchInterestPoints(
 {
     numMatches = 0;
 
-    // Compute the descriptors for each interest point.
-    // You can access the descriptor for each interest point using interestPts1[i].m_Desc[j].
-    // If interestPts1[i].m_DescSize = 0, it was not able to compute a descriptor for that point
+    // compute the descriptors for each interest point.
     ComputeDescriptors(image1, interestPts1, numInterestsPts1);
     ComputeDescriptors(image2, interestPts2, numInterestsPts2);
 
-    // Add your code here for finding the best matches for each point.
+    std::vector<CMatches> matchList;
 
-    // Once you uknow the number of matches allocate an array as follows:
-    // *matches = new CMatches [numMatches];
+    // find the best match for each interest point in image 1
+    for(int i1 = 0; i1 < numInterestsPts1; i1++)
+    {
+        // unable to compute descriptor, ignore
+        if(interestPts1[i1].m_DescSize == 0)
+            continue;
+        
+        CIntPt* match = NULL;
+        double matchDiff = 0.0;
 
-    // Draw the matches
+        // compare descriptor with image 2 descriptors
+        for(int i2 = 0; i2 < numInterestsPts2; i2++)
+        {
+            // unable to compute descriptor, ignore
+            if(interestPts2[i2].m_DescSize == 0)
+                continue;
+
+            // compute difference
+            double diff = 0.0;
+            for(int desc = 0; desc < interestPts1[i1].m_DescSize && desc < interestPts2[i2].m_DescSize; desc++)
+            {
+                diff += std::pow( (interestPts1[i1].m_Desc[desc] - interestPts2[i2].m_Desc[desc]), 2);
+            }
+
+            // check if closer match and update
+            if(match == NULL || diff < matchDiff)
+            {
+                match = &interestPts2[i2];
+                matchDiff = diff;
+            }
+        }
+
+        // add best intesest point match to list
+        CMatches pointsMatch;
+        pointsMatch.m_X1 = interestPts1[i1].m_X;
+        pointsMatch.m_Y1 = interestPts1[i1].m_Y;
+        pointsMatch.m_X2 = match->m_X;
+        pointsMatch.m_Y2 = match->m_Y;
+        matchList.push_back(pointsMatch);
+    }
+
+    // save match list
+    numMatches = matchList.size();
+    *matches = new CMatches[numMatches];
+    for(int i = 0; i < matchList.size(); i++)
+    {
+        (*matches)[i] = matchList[i];
+    }
+
+    // draw the matches
     DrawMatches(*matches, numMatches, image1Display, image2Display);
 }
 
@@ -690,23 +736,91 @@ void MainWindow::MatchInterestPoints(
 */
 void MainWindow::Project(double x1, double y1, double &x2, double &y2, double h[3][3])
 {
-    // Add your code here.
+    // compute resulting matrix [H][xy1] = [uvw]
+    double u = h[0][0]*x1 + h[0][1]*y1 + h[0][2]*1;
+    double v = h[1][0]*x1 + h[1][1]*y1 + h[1][2]*1;
+    double w = h[2][0]*x1 + h[2][1]*y1 + h[2][2]*1;
+    
+    x2 = u / w;
+    y2 = v / w;
 }
 
 /**
 * Count the number of inliers given a homography. This is a helper function for RANSAC.
 *
-* @param h - input homography used to project points (image1 -> image2
+* @param h - input homography used to project points (image1 -> image2)
 * @param matches - array of matching points
 * @param numMatches - number of matchs in the array
 * @param inlierThreshold - maximum distance between points that are considered to be inliers
+* @param inlierMatches - (optional) list of matching inliers
 * @return the total number of inliers.
 */
-int MainWindow::ComputeInlierCount(double h[3][3], CMatches *matches, int numMatches, double inlierThreshold)
+int MainWindow::ComputeInlierCount(double h[3][3], CMatches *matches, int numMatches, double inlierThreshold, 
+    CMatches** inlierMatches)
 {
-    // Add your code here.
+    int inlierCount = 0;
 
-    return 0;
+    std::vector<CMatches> inlierMatchList;
+
+    // check each match
+    for(int i = 0; i < numMatches; i++)
+    {
+        double proX = 0.0;
+        double proY = 0.0;
+
+        // project image 1 coordinates
+        Project(matches[i].m_X1, matches[i].m_Y1, proX, proY, h);
+
+        // compare distance to image 2 coordinates
+        // sqrt( (x2-x1)^2 + (y2-y1)^2 )
+        double dist = std::sqrt( std::pow((matches[i].m_X2 - proX),2) + std::pow((matches[i].m_Y2 - proY),2) );
+
+        // if distance within threshold, count as inlier
+        if( dist <= inlierThreshold )
+        {
+            inlierCount++;
+            inlierMatchList.push_back(matches[i]);
+        }
+    }
+
+    // save matches if requested
+    if(inlierMatches != NULL)
+    {
+        (*inlierMatches) = new CMatches[inlierCount];
+
+        for(int i = 0; i < inlierCount; i++)
+        {
+            (*inlierMatches)[i] = inlierMatchList[i];
+        }
+    }
+
+    return inlierCount;
+}
+
+// Generate random number between 0 and max-1 that does not include the specified set of numbers.
+// If a number if the not set is unused, set to -1
+static int RandomNotInSet(int max, const int& not1, const int& not2, const int& not3)
+{
+    int r = -1;
+
+    while(r == -1 || r == not1 || r == not2 || r == not3)
+    {
+        r = std::rand() % max;
+    }
+    return r;
+}
+
+static void ArrayHomCopy(double in[3][3], double out[3][3])
+{
+    out[0][0] = in[0][0];
+    out[0][1] = in[0][1];
+    out[0][2] = in[0][2];
+    out[1][0] = in[1][0];
+    out[1][1] = in[1][1];
+    out[1][2] = in[1][2];
+    out[2][0] = in[2][0];
+    out[2][1] = in[2][1];
+    out[2][2] = in[2][2];
 }
 
 /**
@@ -724,10 +838,55 @@ int MainWindow::ComputeInlierCount(double h[3][3], CMatches *matches, int numMat
 void MainWindow::RANSAC(CMatches *matches, int numMatches, int numIterations, double inlierThreshold,
     double hom[3][3], double homInv[3][3], QImage &image1Display, QImage &image2Display)
 {
-    // Add your code here.
+    int inliers = 0;
+    double bestHom[3][3];
 
-    // After you're done computing the inliers, display the corresponding matches.
-    // DrawMatches(inliers, numInliers, image1Display, image2Display);
+    // for each iteration
+    for(int iter = 0; iter < numIterations; iter++)
+    {
+        double selectedHom[3][3];
+
+        // randomly select 4 pairs of points that potentially match
+        int pt1 = RandomNotInSet(numMatches, -1, -1, -1);
+        int pt2 = RandomNotInSet(numMatches, pt1, -1, -1);
+        int pt3 = RandomNotInSet(numMatches, pt1, pt2, -1);
+        int pt4 = RandomNotInSet(numMatches, pt1, pt2, pt3);
+
+        // compute the homography relating the four selected matches
+        CMatches selectedMatches[4];
+        selectedMatches[0] = matches[pt1];
+        selectedMatches[1] = matches[pt2];
+        selectedMatches[2] = matches[pt3];
+        selectedMatches[3] = matches[pt4];
+        ComputeHomography(selectedMatches, 4, selectedHom, true);
+
+        // using the computed homography, compute the number of inliers
+        int selectedInliers = ComputeInlierCount(selectedHom, matches, numMatches, inlierThreshold, NULL);
+
+        // if this homography produces the highest number of inliers, store as the best homography
+        if(selectedInliers > inliers)
+        {
+            inliers = selectedInliers;
+            ArrayHomCopy(selectedHom, bestHom);
+        }
+    }
+    
+    // using the best homography, compute the number of inliers
+    CMatches* inlierMatches = NULL;
+    int inlierCount = ComputeInlierCount(bestHom, matches, numMatches, inlierThreshold, &inlierMatches);
+
+    // compute a new homography (and inverse) based on the inlier matches
+    double finalHom[3][3];
+    double finalHomInv[3][3];
+    ComputeHomography(inlierMatches, inlierCount, finalHom, true);
+    ComputeHomography(inlierMatches, inlierCount, finalHomInv, false);
+
+    // display the inlier matches.
+    DrawMatches(inlierMatches, inlierCount, image1Display, image2Display);
+
+    // save homographies
+    ArrayHomCopy(finalHom, hom);
+    ArrayHomCopy(finalHomInv, homInv);
 }
 
 /**
