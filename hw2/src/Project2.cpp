@@ -897,6 +897,7 @@ void MainWindow::RANSAC(CMatches *matches, int numMatches, int numIterations, do
 * @param image - input image
 * @param (x, y) - location to interpolate
 * @param rgb - returned color values
+* @return true if interpolation sucessful
 */
 bool MainWindow::BilinearInterpolation(QImage *image, double x, double y, double rgb[3])
 {
@@ -910,7 +911,7 @@ bool MainWindow::BilinearInterpolation(QImage *image, double x, double y, double
     int baseY = (int)y;
 
     // check if pixels in range
-    if( x >= 0 && x < image->width() && y >= 0 && y < image->height() )
+    if( x >= 0 && (x+1) < image->width() && y >= 0 && (y+1) < image->height() )
     {
         // compute weight values
         double a = x-baseX;
@@ -935,9 +936,11 @@ bool MainWindow::BilinearInterpolation(QImage *image, double x, double y, double
         rgb[1] = std::min(rgb[1],255.0);
         rgb[2] = std::max(rgb[2],0.0);
         rgb[2] = std::min(rgb[2],255.0);
+
+        return true;
     }
 
-    return true;
+    return false;
 }
 
 /**
@@ -972,8 +975,8 @@ void MainWindow::Stitch(QImage image1, QImage image2, double hom[3][3], double h
     int bottom = std::max(image1.height(), (int)(std::max(image2BottomRight[1], image2BottomLeft[1])+1.0));
     int right = std::max(image1.width(), (int)(std::max(image2BottomRight[0], image2TopRight[0])+1.0));
 
-    ws = right - left;
-    hs = bottom - top;
+    ws = right - left + 1;
+    hs = bottom - top + 1;
 
     // initialize stiched image
     stitchedImage = QImage(ws, hs, QImage::Format_RGB32);
@@ -984,14 +987,14 @@ void MainWindow::Stitch(QImage image1, QImage image2, double hom[3][3], double h
     {
         for(int c=0;c<image1.width();c++)
         {
-            stitchedImage.setPixel(c, r, image1.pixel(c, r));
+            stitchedImage.setPixel(c+std::abs(left), r+std::abs(top), image1.pixel(c, r));
         }
     }
 
     // for each pixel in stitched image, 
-    for(int r=0; r < stitchedImage.height(); r++)
+    for(int r=top; r < bottom; r++)
     {
-        for(int c=0; c < stitchedImage.width(); c++)
+        for(int c=left; c < right; c++)
         {
             double x2 = 0.0;
             double y2 = 0.0;
@@ -999,22 +1002,13 @@ void MainWindow::Stitch(QImage image1, QImage image2, double hom[3][3], double h
             // project point onto image2
             Project(c, r, x2, y2, hom);
 
-            // check if within image2 boundary
-            if(x2 >= 0 && x2 < image2.width() && y2 >= 0 && y2 < image2.height())
+            // interpolate image2 pixel
+            double rgb[3];
+            if( BilinearInterpolation(&image2, x2, y2, rgb) == true )
             {
-                // interpolate image2 pixel
-                double rgb[3];
-                BilinearInterpolation(&image2, x2, y2, rgb);
-
                 // add image2 pixel to stitched image
-                stitchedImage.setPixel(c, r, qRgb(rgb[0], rgb[1], rgb[2]));
+                stitchedImage.setPixel(c+std::abs(left), r+std::abs(top), qRgb(rgb[0], rgb[1], rgb[2]));
             }
         }
     }
-
-    // Compute the size of “stitchedImage.”  To do this project the four corners of “image2” onto “image1” using ComputeHomography and “homInv”.  Allocate the image.
-        // Copy “image1” onto the “stitchedImage” at the right location.
-        // For each pixel in “stitchedImage”, project the point onto “image2”.  If it lies within image2’s boundaries, 
-        // add or blend the pixel’s value to “stitchedImage.”  When finding the value of image2’s pixel use BilinearInterpolation.
-
 }
