@@ -845,6 +845,9 @@ void MainWindow::RANSAC(CMatches *matches, int numMatches, int numIterations, do
     int inliers = 0;
     double bestHom[3][3];
 
+    if(numMatches == 0)
+        return;
+
     // for each iteration
     for(int iter = 0; iter < numIterations; iter++)
     {

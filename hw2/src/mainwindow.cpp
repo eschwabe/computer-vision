@@ -15,6 +15,12 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->RANSACButton, SIGNAL(clicked()), this, SLOT(RANSAC()));
     connect(ui->stitchButton, SIGNAL(clicked()), this, SLOT(StitchImages()));
 
+    m_IntPtsSet = false;
+    m_MatchesSet = false;
+    m_HomSet = false;
+    m_Image1Set = false;
+    m_Image2Set = false;
+
     ui->harrisSpinBox->setValue(2.0);
     ui->harrisThresSpinBox->setValue(50.0);
     ui->RANSACThresSpinBox->setValue(5.0);
@@ -46,7 +52,10 @@ void MainWindow::OpenImage()
     if(ui->tabWidget->currentIndex() == 0)
     {
         if (!fileName.isEmpty())
+        {
             m_InImage1.load(fileName);
+            m_Image1Set = true;
+        }
 
         m_InImage1Display = m_InImage1.copy();
     }
@@ -54,7 +63,10 @@ void MainWindow::OpenImage()
     if(ui->tabWidget->currentIndex() == 1)
     {
         if (!fileName.isEmpty())
+        {
             m_InImage2.load(fileName);
+            m_Image2Set = true;
+        }
 
         m_InImage2Display = m_InImage2.copy();
     }
@@ -72,19 +84,19 @@ void MainWindow::SaveImage()
     if(ui->tabWidget->currentIndex() ==  0)
     {
         if (!fileName.isEmpty())
-            m_InImage1Display.save(fileName);
+            m_InImage1Display.save(fileName, "png", 100);
     }
 
     if(ui->tabWidget->currentIndex() ==  1)
     {
         if (!fileName.isEmpty())
-            m_InImage2Display.save(fileName);
+            m_InImage2Display.save(fileName, "png", 100);
     }
 
     if(ui->tabWidget->currentIndex() ==  2)
     {
         if (!fileName.isEmpty())
-            m_StitchedImage.save(fileName);
+            m_StitchedImage.save(fileName, "png", 100);
     }
 }
 
@@ -92,23 +104,29 @@ void MainWindow::HarrisCornerImage()
 {
     double sigma = ui->harrisSpinBox->value();
     double thres = ui->harrisThresSpinBox->value();
-
+    
     HarrisCornerDetector(m_InImage1, sigma, thres, &m_IntPts1, m_NumIntPts1, m_InImage1Display);
     HarrisCornerDetector(m_InImage2, sigma, thres, &m_IntPts2, m_NumIntPts2, m_InImage2Display);
+
+    m_IntPtsSet = true;
 
     DrawDisplayImage();
 }
 
 void MainWindow::MatchImages()
 {
-    m_InImage1Display = m_InImage1.copy();
-    m_InImage2Display = m_InImage2.copy();
+    if(m_IntPtsSet == true && m_Image1Set == true && m_Image2Set == true)
+    {
+        m_InImage1Display = m_InImage1.copy();
+        m_InImage2Display = m_InImage2.copy();
 
-    MatchInterestPoints(m_InImage1, m_IntPts1, m_NumIntPts1,
-               m_InImage2, m_IntPts2, m_NumIntPts2,
-               &m_Matches, m_NumMatches, m_InImage1Display, m_InImage2Display);
+        MatchInterestPoints(m_InImage1, m_IntPts1, m_NumIntPts1,
+                   m_InImage2, m_IntPts2, m_NumIntPts2,
+                   &m_Matches, m_NumMatches, m_InImage1Display, m_InImage2Display);
+        m_MatchesSet = true;
 
-    DrawDisplayImage();
+        DrawDisplayImage();
+    }
 }
 
 void MainWindow::RANSAC()
@@ -116,21 +134,28 @@ void MainWindow::RANSAC()
     int numIterations = ui->iterationsBox->value();
     double inlierThreshold = ui->RANSACThresSpinBox->value();
 
-    m_InImage1Display = m_InImage1.copy();
-    m_InImage2Display = m_InImage2.copy();
+    if(m_MatchesSet == true)
+    {
+        m_InImage1Display = m_InImage1.copy();
+        m_InImage2Display = m_InImage2.copy();
 
-    RANSAC(m_Matches, m_NumMatches, numIterations, inlierThreshold,
-           m_Hom, m_HomInv, m_InImage1Display, m_InImage2Display);
+        RANSAC(m_Matches, m_NumMatches, numIterations, inlierThreshold,
+               m_Hom, m_HomInv, m_InImage1Display, m_InImage2Display);
+        m_HomSet = true;
 
-    DrawDisplayImage();
+        DrawDisplayImage();
+    }
 }
 
 void MainWindow::StitchImages()
 {
-    Stitch(m_InImage1, m_InImage2, m_Hom, m_HomInv, m_StitchedImage);
+    if(m_HomSet == true)
+    {
+        Stitch(m_InImage1, m_InImage2, m_Hom, m_HomInv, m_StitchedImage);
 
-    ui->tabWidget->setCurrentIndex(2);
-    DrawDisplayImage();
+        ui->tabWidget->setCurrentIndex(2);
+        DrawDisplayImage();
+    }
 }
 
 

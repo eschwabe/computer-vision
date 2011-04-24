@@ -64,6 +64,12 @@ private:
     double m_Hom[3][3];
     double m_HomInv[3][3];
 
+    bool m_IntPtsSet;
+    bool m_MatchesSet;
+    bool m_HomSet;
+    bool m_Image1Set;
+    bool m_Image2Set;
+
     void DrawDisplayImage();
 
     void SeparableGaussianBlurImage(double *image, int w, int h, double sigma);
