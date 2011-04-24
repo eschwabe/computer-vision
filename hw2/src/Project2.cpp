@@ -50,7 +50,7 @@ void MainWindow::DrawInterestPoints(CIntPt *interestPts, int numInterestsPts, QI
 */
 void MainWindow::ComputeDescriptors(QImage image, CIntPt *interestPts, int numInterestsPts)
 {
-    int r, c, cd, rd, i, j;
+    int r, c, cd, rd;
     int w = image.width();
     int h = image.height();
     double *buffer = new double [w*h];
@@ -75,7 +75,7 @@ void MainWindow::ComputeDescriptors(QImage image, CIntPt *interestPts, int numIn
 
     // Compute the desciptor from the difference between the point sampled at its center
     // and eight points sampled around it.
-    for(i=0;i<numInterestsPts;i++)
+    for(int i=0;i<numInterestsPts;i++)
     {
         int c = (int) interestPts[i].m_X;
         int r = (int) interestPts[i].m_Y;
@@ -233,6 +233,33 @@ bool MainWindow::ComputeHomography(CMatches *matches, int numMatches, double h[3
     return true;
 }
 
+// Generate random number between 0 and max-1 that does not include the specified set of numbers.
+// If a number if the not set is unused, set to -1
+static int RandomNotInSet(int max, const int& not1, const int& not2, const int& not3)
+{
+    int r = -1;
+
+    while(r == -1 || r == not1 || r == not2 || r == not3)
+    {
+        r = std::rand() % max;
+    }
+    return r;
+}
+
+// Copy a homogenous array from input to output
+static void ArrayHomCopy(double in[3][3], double out[3][3])
+{
+    out[0][0] = in[0][0];
+    out[0][1] = in[0][1];
+    out[0][2] = in[0][2];
+    out[1][0] = in[1][0];
+    out[1][1] = in[1][1];
+    out[1][2] = in[1][2];
+    out[2][0] = in[2][0];
+    out[2][1] = in[2][1];
+    out[2][2] = in[2][2];
+}
+
 // -----------------------------------------------------------------------------
 // IMAGE METHODS
 // -----------------------------------------------------------------------------
@@ -350,8 +377,8 @@ static void BufferSingleApplyOffset(double *buffer, const int& bWidth, const int
     }
 }
 
-// Scale buffer values to the min/max range
-static void BufferSingleScale(double *buffer, const int& bWidth, const int& bHeight, const double& min, const double& max)
+// Scale buffer values to a 0-max range
+static void BufferSingleScale(double *buffer, const int& bWidth, const int& bHeight, const double& max)
 {
     // find buffer min max
     double bMin = 0.0;
@@ -625,13 +652,13 @@ void MainWindow::HarrisCornerDetector(QImage image, double sigma, double thres, 
     *interestPts = new CIntPt[numInterestsPts];
 
     // store the interest point locations in “interestPts”
-    for(int pos=0; pos<iPoints.size(); pos++)
+    for(std::size_t pos=0; pos<iPoints.size(); pos++)
     {
         (*interestPts)[pos] = iPoints[pos];
     }
 
     // scale harris points for display
-    BufferSingleScale(harrisBuffer, w, h, 0.0, 255.0);
+    BufferSingleScale(harrisBuffer, w, h, 255.0);
 
     // display harris buffer
     ImageConvertBuffer(&imageDisplay, harrisBuffer);
@@ -718,7 +745,7 @@ void MainWindow::MatchInterestPoints(
     // save match list
     numMatches = matchList.size();
     *matches = new CMatches[numMatches];
-    for(int i = 0; i < matchList.size(); i++)
+    for(std::size_t i = 0; i < matchList.size(); i++)
     {
         (*matches)[i] = matchList[i];
     }
@@ -797,32 +824,6 @@ int MainWindow::ComputeInlierCount(double h[3][3], CMatches *matches, int numMat
     return inlierCount;
 }
 
-// Generate random number between 0 and max-1 that does not include the specified set of numbers.
-// If a number if the not set is unused, set to -1
-static int RandomNotInSet(int max, const int& not1, const int& not2, const int& not3)
-{
-    int r = -1;
-
-    while(r == -1 || r == not1 || r == not2 || r == not3)
-    {
-        r = std::rand() % max;
-    }
-    return r;
-}
-
-static void ArrayHomCopy(double in[3][3], double out[3][3])
-{
-    out[0][0] = in[0][0];
-    out[0][1] = in[0][1];
-    out[0][2] = in[0][2];
-    out[1][0] = in[1][0];
-    out[1][1] = in[1][1];
-    out[1][2] = in[1][2];
-    out[2][0] = in[2][0];
-    out[2][1] = in[2][1];
-    out[2][2] = in[2][2];
-}
-
 /**
 * Compute homography transformation between images using RANSAC.
 *
@@ -899,7 +900,42 @@ void MainWindow::RANSAC(CMatches *matches, int numMatches, int numIterations, do
 */
 bool MainWindow::BilinearInterpolation(QImage *image, double x, double y, double rgb[3])
 {
-    // Add your code here.
+    // initialize rgb to black
+    rgb[0] = 0.0;
+    rgb[0] = 0.0;
+    rgb[0] = 0.0;
+  
+    // compute base pixel
+    int baseX = (int)x;
+    int baseY = (int)y;
+
+    // check if pixels in range
+    if( x >= 0 && x < image->width() && y >= 0 && y < image->height() )
+    {
+        // compute weight values
+        double a = x-baseX;
+        double b = y-baseY;
+
+        // find pixels
+        QRgb pixelXY = image->pixel(baseX, baseY);
+        QRgb pixelX1Y = image->pixel(baseX+1, baseY);
+        QRgb pixelXY1 = image->pixel(baseX, baseY+1);
+        QRgb pixelX1Y1 = image->pixel(baseX+1, baseY+1);
+
+        // compute interpolated pixel
+        // f (x + a, y + b) = (1 - a)(1 - b) f (x, y) + a(1 - b) f (x + 1, y) + (1 - a)b f (x,y + 1) + ab f (x + 1, y + 1)
+        rgb[0] = ((1-a)*(1-b)*qRed(pixelXY)) + (a*(1-b)*qRed(pixelX1Y)) + ((1-a)*b*qRed(pixelXY1)) + (a*b*qRed(pixelX1Y1));
+        rgb[1] = ((1-a)*(1-b)*qGreen(pixelXY)) + (a*(1-b)*qGreen(pixelX1Y)) + ((1-a)*b*qGreen(pixelXY1)) + (a*b*qGreen(pixelX1Y1));
+        rgb[2] = ((1-a)*(1-b)*qBlue(pixelXY)) + (a*(1-b)*qBlue(pixelX1Y)) + ((1-a)*b*qBlue(pixelXY1)) + (a*b*qBlue(pixelX1Y1));
+
+        // cap rgb values
+        rgb[0] = std::max(rgb[0],0.0);
+        rgb[0] = std::min(rgb[0],255.0);
+        rgb[1] = std::max(rgb[1],0.0);
+        rgb[1] = std::min(rgb[1],255.0);
+        rgb[2] = std::max(rgb[2],0.0);
+        rgb[2] = std::min(rgb[2],255.0);
+    }
 
     return true;
 }
@@ -915,14 +951,70 @@ bool MainWindow::BilinearInterpolation(QImage *image, double x, double y, double
 */
 void MainWindow::Stitch(QImage image1, QImage image2, double hom[3][3], double homInv[3][3], QImage &stitchedImage)
 {
-    // Width and height of stitchedImage
+    // width and height of stitched image
     int ws = 0;
     int hs = 0;
 
-    // Add your code to compute ws and hs here.
+    // project the four corners of image 2 onto image 1
+    double image2TopLeft[2] = { 0, 0 };
+    double image2TopRight[2] = { image2.width()-1, 0 };
+    double image2BottomLeft[2] = { 0, image2.height()-1 };
+    double image2BottomRight[2] = { image2.width()-1, image2.height()-1 };
+    
+    Project(image2TopLeft[0], image2TopLeft[1], image2TopLeft[0], image2TopLeft[1], homInv);
+    Project(image2TopRight[0], image2TopRight[1], image2TopRight[0], image2TopRight[1], homInv);
+    Project(image2BottomLeft[0], image2BottomLeft[1], image2BottomLeft[0], image2BottomLeft[1], homInv);
+    Project(image2BottomRight[0], image2BottomRight[1], image2BottomRight[0], image2BottomRight[1], homInv);
 
+    // compute the size of stitched image, minimum top-left position and maximum bottom-right position
+    int top = std::min(0, (int)std::min(image2TopLeft[1], image2TopRight[1]));
+    int left = std::min(0, (int)std::min(image2TopLeft[0], image2BottomLeft[0]));
+    int bottom = std::max(image1.height(), (int)(std::max(image2BottomRight[1], image2BottomLeft[1])+1.0));
+    int right = std::max(image1.width(), (int)(std::max(image2BottomRight[0], image2TopRight[0])+1.0));
+
+    ws = right - left;
+    hs = bottom - top;
+
+    // initialize stiched image
     stitchedImage = QImage(ws, hs, QImage::Format_RGB32);
     stitchedImage.fill(qRgb(0,0,0));
 
-    // Add you code to warp image1 and image2 to stitchedImage here.
+    // copy image1 into stitched image at the proper location
+    for(int r=0;r<image1.height();r++)
+    {
+        for(int c=0;c<image1.width();c++)
+        {
+            stitchedImage.setPixel(c, r, image1.pixel(c, r));
+        }
+    }
+
+    // for each pixel in stitched image, 
+    for(int r=0; r < stitchedImage.height(); r++)
+    {
+        for(int c=0; c < stitchedImage.width(); c++)
+        {
+            double x2 = 0.0;
+            double y2 = 0.0;
+
+            // project point onto image2
+            Project(c, r, x2, y2, hom);
+
+            // check if within image2 boundary
+            if(x2 >= 0 && x2 < image2.width() && y2 >= 0 && y2 < image2.height())
+            {
+                // interpolate image2 pixel
+                double rgb[3];
+                BilinearInterpolation(&image2, x2, y2, rgb);
+
+                // add image2 pixel to stitched image
+                stitchedImage.setPixel(c, r, qRgb(rgb[0], rgb[1], rgb[2]));
+            }
+        }
+    }
+
+    // Compute the size of “stitchedImage.”  To do this project the four corners of “image2” onto “image1” using ComputeHomography and “homInv”.  Allocate the image.
+        // Copy “image1” onto the “stitchedImage” at the right location.
+        // For each pixel in “stitchedImage”, project the point onto “image2”.  If it lies within image2’s boundaries, 
+        // add or blend the pixel’s value to “stitchedImage.”  When finding the value of image2’s pixel use BilinearInterpolation.
+
 }
