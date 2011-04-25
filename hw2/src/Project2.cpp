@@ -5,6 +5,7 @@
 #include "Matrix.h"
 #include <sstream>
 #include <iomanip>
+#include <cmath>
 
 #ifdef _MSC_VER 
 #define NOMINMAX
@@ -28,6 +29,7 @@ static void PrintString(const std::string& str)
     OutputDebugStringA(str.c_str());
 #else
     std::cout << str;
+    std::cout.flush();
 #endif  
 }
 
