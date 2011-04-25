@@ -3,10 +3,33 @@
 #include "ui_mainwindow.h"
 #include <QtGui>
 #include "Matrix.h"
+#include <sstream>
+#include <iomanip>
+
+#ifdef _MSC_VER 
+#define NOMINMAX
+#include <Windows.h>
+#else
+#include <iostream>
+#endif
 
 // -----------------------------------------------------------------------------
 // HELPER METHODS
 // -----------------------------------------------------------------------------
+
+/**
+* Print string to standard output
+*
+* @param str - output string
+*/
+static void PrintString(const std::string& str)
+{
+#ifdef _MSC_VER 
+    OutputDebugStringA(str.c_str());
+#else
+    std::cout << str;
+#endif  
+}
 
 /**
 * Draw detected Harris corners. Draws a red cross on top of detected corners.
@@ -578,7 +601,7 @@ void MainWindow::HarrisCornerDetector(QImage image, double sigma, double thres, 
         }
     }
 
-    // blur x^2, dy^2, and dxdy buffers with seperable gaussian kernel
+    // blur dx^2, dy^2, and dxdy buffers with seperable gaussian kernel
     SeparableGaussianBlurImage(horzBuffer, w, h, sigma);
     SeparableGaussianBlurImage(vertBuffer, w, h, sigma);
     SeparableGaussianBlurImage(dxdyBuffer, w, h, sigma);
@@ -753,6 +776,13 @@ void MainWindow::MatchInterestPoints(
         (*matches)[i] = matchList[i];
     }
 
+    // print debug info
+    std::stringstream s;
+    s << "Image 1 Interest Points: " << numInterestsPts1 << "\n";
+    s << "Image 2 Interest Points: " << numInterestsPts2 << "\n";
+    s << "Matches: " << numMatches << "\n";
+    PrintString(s.str());
+
     // draw the matches
     DrawMatches(*matches, numMatches, image1Display, image2Display);
 }
@@ -887,6 +917,11 @@ void MainWindow::RANSAC(CMatches *matches, int numMatches, int numIterations, do
     double finalHomInv[3][3];
     ComputeHomography(inlierMatches, inlierCount, finalHom, true);
     ComputeHomography(inlierMatches, inlierCount, finalHomInv, false);
+
+    // print debug info
+    std::stringstream s;
+    s << "RANSAC Inlier Count: " << inlierCount << "\n";
+    PrintString(s.str());
 
     // display the inlier matches.
     DrawMatches(inlierMatches, inlierCount, image1Display, image2Display);
