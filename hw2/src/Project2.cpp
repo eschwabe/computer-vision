@@ -987,6 +987,42 @@ bool MainWindow::BilinearInterpolation(QImage *image, double x, double y, double
 }
 
 /**
+* Generate a center-weight map for an image with size width*height
+*/
+double* GenerateWeightMap(const int& height, const int& width)
+{
+    int midH = height/2;
+    int midW = width/2;
+
+    // compute distance from edge to the center
+    double centerDist = std::sqrt(/*std::pow(midH, 2.0) +*/ std::pow(midW, 2.0));
+
+    // build buffer
+    double* buffer = new double[height*width];
+
+    // compute weight for each location in the buffer
+    for(int r=0;r<height;r++)
+    {
+        for(int c=0;c<width;c++)
+        {
+            if(/*r == midH &&*/ c == midW)
+            {
+                buffer[(r*width) + c] = centerDist;
+            }
+            else
+            {
+                buffer[(r*width) + c] = centerDist-(std::sqrt(/*std::pow(midH-r, 2.0) +*/ std::pow(midW-c, 2.0)));
+            }
+
+            // normalize
+            buffer[(r*width) + c] /= centerDist;
+        }
+    }
+
+    return buffer;
+}
+
+/**
 * Stitch together two images using the homography transformation.
 * 
 * @param image1 - first input image
@@ -1021,6 +1057,10 @@ void MainWindow::Stitch(QImage image1, QImage image2, double hom[3][3], double h
     ws = right - left + 1;
     hs = bottom - top + 1;
 
+    // generate weight maps for images
+    double* image1Weights = GenerateWeightMap(image1.height(), image1.width());
+    double* image2Weights = GenerateWeightMap(image2.height(), image2.width());
+
     // initialize stiched image
     stitchedImage = QImage(ws, hs, QImage::Format_RGB32);
     stitchedImage.fill(qRgb(0,0,0));
@@ -1049,9 +1089,59 @@ void MainWindow::Stitch(QImage image1, QImage image2, double hom[3][3], double h
             double rgb[3];
             if( BilinearInterpolation(&image2, x2, y2, rgb) == true )
             {
+                // stiched image row and column
+                int sRow = r+std::abs(top);
+                int sCol = c+std::abs(left);
+
+                // check if overlap with image1 pixel
+                // combine pixels based on weight map
+                if( sRow >= std::abs(top) && sRow < std::abs(top)+image1.height() &&
+                    sCol >= std::abs(left) && sCol < std::abs(left)+image1.width() )
+                {
+                    // verify pixel is not part of black borders
+                    if(qRed(stitchedImage.pixel(sCol, sRow)) != 0 &&
+                        qGreen(stitchedImage.pixel(sCol, sRow)) != 0 &&
+                        qBlue(stitchedImage.pixel(sCol, sRow)) != 0)
+                    {
+                        // compute image 1 pixel
+                        int i1Row = sRow - std::abs(top);
+                        int i1Col = sCol - std::abs(left);
+
+                        // find image weights
+                        double i1Weight = image1Weights[i1Row*image1.width() + i1Col];
+                        double i2Weight = image2Weights[((int)y2)*image2.width() + (int)x2];
+
+                        // normalize weights
+                        double totalWeight = i1Weight + i2Weight;
+                        i1Weight /= totalWeight;
+                        i2Weight /= totalWeight;
+
+                        // compute new rgb values
+                        double image2rgb[3] = {rgb[0], rgb[1], rgb[2]};
+
+                        rgb[0] = i1Weight*qRed(stitchedImage.pixel(sCol, sRow)) + i2Weight*image2rgb[0];
+                        rgb[1] = i1Weight*qGreen(stitchedImage.pixel(sCol, sRow)) + i2Weight*image2rgb[1];
+                        rgb[2] = i1Weight*qBlue(stitchedImage.pixel(sCol, sRow)) + i2Weight*image2rgb[2];
+                    }
+                }
+                 
+                // AVERAGE PIXELS
+                //if(qRed(stitchedImage.pixel(sCol, sRow)) != 0 &&
+                //   qGreen(stitchedImage.pixel(sCol, sRow)) != 0 &&
+                //   qBlue(stitchedImage.pixel(sCol, sRow)) != 0)
+                //{
+                //    // average with existing pixel
+                //    rgb[0] = (rgb[0] + qRed(stitchedImage.pixel(sCol, sRow))) / 2;
+                //    rgb[1] = (rgb[1] + qGreen(stitchedImage.pixel(sCol, sRow))) / 2;
+                //    rgb[2] = (rgb[2] + qBlue(stitchedImage.pixel(sCol, sRow))) / 2;
+                //}
+
                 // add image2 pixel to stitched image
-                stitchedImage.setPixel(c+std::abs(left), r+std::abs(top), qRgb(rgb[0], rgb[1], rgb[2]));
+                stitchedImage.setPixel(sCol, sRow, qRgb(rgb[0], rgb[1], rgb[2]));
             }
         }
     }
+
+    delete [] image1Weights;
+    delete [] image2Weights;
 }
