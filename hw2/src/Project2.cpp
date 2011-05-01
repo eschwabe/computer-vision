@@ -991,11 +991,7 @@ bool MainWindow::BilinearInterpolation(QImage *image, double x, double y, double
 */
 double* GenerateWeightMap(const int& height, const int& width)
 {
-    int midH = height/2;
-    int midW = width/2;
-
-    // compute distance from edge to the center
-    double centerDist = std::sqrt(/*std::pow(midH, 2.0) +*/ std::pow(midW, 2.0));
+    double max = 0.0;
 
     // build buffer
     double* buffer = new double[height*width];
@@ -1005,17 +1001,23 @@ double* GenerateWeightMap(const int& height, const int& width)
     {
         for(int c=0;c<width;c++)
         {
-            if(/*r == midH &&*/ c == midW)
-            {
-                buffer[(r*width) + c] = centerDist;
-            }
-            else
-            {
-                buffer[(r*width) + c] = centerDist-(std::sqrt(/*std::pow(midH-r, 2.0) +*/ std::pow(midW-c, 2.0)));
-            }
+            // find the minimum number of pixels (distance) to an edge of the image
+            double dist = std::min( std::min(r, height-r), std::min(c, width-c) ) + 1;
+            buffer[(r*width) + c] = dist;
 
-            // normalize
-            buffer[(r*width) + c] /= centerDist;
+            if(dist > max)
+            {
+                max = dist;
+            }
+        }
+    }
+
+    // normalize
+    for(int r=0;r<height;r++)
+    {
+        for(int c=0;c<width;c++)
+        {
+            buffer[(r*width) + c] /= max;
         }
     }
 
