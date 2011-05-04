@@ -14,3 +14,7 @@ hw2/src/ImageStitcher.pdb
 hw2/src/ipch/
 hw2/src/ui_mainwindow.h
 hw2/src/vc100.pdb
+hw3/src/debug/
+hw3/src/StereoStudent.sdf
+hw3/src/vc100.pdb
+hw3/src/ui_mainwindow.h
