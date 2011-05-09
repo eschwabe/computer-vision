@@ -472,11 +472,31 @@ void MainWindow::NCC(QImage image1, QImage image2, int minDisparity, int maxDisp
     int w = image1.width();
     int h = image1.height();
 
-    // For NCC (normalized cross correlation) compute the score over a window with the supplied radius.  
-    // Store the computed match cost in “matchCost”.  Each entry in matchCost is the distance in color 
-    // space between (c, r) in image 1 and (c - d, r) in image 2.  Store these values at 
-    // “matchCost[(d – minDisparity)*w*h + r*w + c]”.  Hint: The NCC score is high for good matches and 
-    // low for bad matches, so store one minus the NCC score instead of the NCC score in matchCost.
+    // compute 
+    double* image1sqred = new double[w*h];
+    double* image1sqgreen = new double[w*h];
+    double* image1sqblue = new double[w*h];
+    double* image2sqred = new double[w*h];
+    double* image2sqgreen = new double[w*h];
+    double* image2sqblue = new double[w*h];
+
+    // square each pixel in image 1 and image 2
+    for(int r=0;r<h;r++)
+    {
+        for(int c=0;c<w;c++)
+        {
+            QRgb p1 = image1.pixel(c, r);
+            QRgb p2 = image2.pixel(c, r);
+
+            image1sqred[r*w + c] = std::pow(qRed(p1),2.0);
+            image1sqgreen[r*w + c] = std::pow(qGreen(p1),2.0);
+            image1sqblue[r*w + c] = std::pow(qBlue(p1),2.0);
+
+            image2sqred[r*w + c] = std::pow(qRed(p2),2.0);
+            image2sqgreen[r*w + c] = std::pow(qGreen(p2),2.0);
+            image2sqblue[r*w + c] = std::pow(qBlue(p2),2.0);
+        }
+    }
 
     // for each pixel
     for(int r=0;r<h;r++)
@@ -512,25 +532,25 @@ void MainWindow::NCC(QImage image1, QImage image2, int minDisparity, int maxDisp
                         if(row >= 0 && row < h && col >= 0 && col < w)
                         {
                             p1 = image1.pixel(col, row);
+
+                            distr1s += image1sqred[row*w+col];
+                            distg1s += image1sqgreen[row*w+col];
+                            distb1s += image1sqblue[row*w+col];
                         }
 
                         if(row >= 0 && row < h && col-d >= 0 && col-d < w)
                         {
                             p2 = image2.pixel(col-d, row);
+
+                            distr2s += image2sqred[row*w+(col-d)];
+                            distg2s += image2sqgreen[row*w+(col-d)];
+                            distb2s += image2sqblue[row*w+(col-d)];
                         }
 
                         // sum components of ncc
                         distrm += qRed(p1)*qRed(p2);
                         distgm += qGreen(p1)*qGreen(p2); 
-                        distbm += qBlue(p1)*qBlue(p2);
-
-                        distr1s += std::pow(qRed(p1),2.0);
-                        distg1s += std::pow(qGreen(p1),2.0);
-                        distb1s += std::pow(qBlue(p1),2.0);
-
-                        distr2s += std::pow(qRed(p2),2.0);
-                        distg2s += std::pow(qGreen(p2),2.0);
-                        distb2s += std::pow(qBlue(p2),2.0);
+                        distbm += qBlue(p1)*qBlue(p2);  
                     }
                 }
 
