@@ -678,22 +678,24 @@ void MainWindow::SegmentAverageMatchCost(int *segment, int numSegments,
 void MainWindow::FindBestDisparity(double *matchCost, double *disparities, int w, int h, 
     int minDisparity, int numDisparities)
 {
+    // for each pixel
     for(int r=0;r<h;r++)
     {
         for(int c=0;c<w;c++)
         {
+            // find the lowest disparity
             int min = minDisparity;
 
             for(int d = 0; d<numDisparities; d++)
             {
-                // find lowest disparity
+                // check if cost is lower at this disparity
                 if(matchCost[(min)*w*h + r*w + c] > matchCost[(d)*w*h + r*w + c])
                 {
                     min = d+minDisparity;
                 }
             }
 
-            // save disparity
+            // save lowest cost disparity
             disparities[r*w + c] = min;
         }
     }
