@@ -249,7 +249,7 @@
          </size>
         </property>
         <property name="text">
-         <string>Find Max Disparity</string>
+         <string>Find Best Disparity</string>
         </property>
        </widget>
       </item>
@@ -571,7 +571,6 @@
          <attribute name="title">
           <string>Render</string>
          </attribute>
-         <zorder></zorder>
         </widget>
        </widget>
       </item>

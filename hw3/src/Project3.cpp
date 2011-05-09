@@ -4,21 +4,20 @@
 #include <QtGui>
 
 /*******************************************************************************
-    The following are helper routines with code already written.
-    The routines you'll need to write for the assignment are below.
+    HELPER METHODS
 *******************************************************************************/
 
 /*******************************************************************************
-   K-means segment the image
-        image - Input image
-        gridSize - Initial size of the segments
-        numIterations - Number of iterations to run k-means
-        spatialSigma - Spatial sigma for measuring distance
-        colorSigma - Color sigma for measuring distance
-        matchCost - The match cost for each pixel at each disparity
-        numDisparities - Number of disparity levels
-        segmentImage - Image showing segmentations
+    K-means segment the image
 
+    image - Input image
+    gridSize - Initial size of the segments
+    numIterations - Number of iterations to run k-means
+    spatialSigma - Spatial sigma for measuring distance
+    colorSigma - Color sigma for measuring distance
+    matchCost - The match cost for each pixel at each disparity
+    numDisparities - Number of disparity levels
+    segmentImage - Image showing segmentations
 *******************************************************************************/
 void MainWindow::Segment(QImage image, int gridSize, int numIterations, double spatialSigma, double colorSigma,
                          double *matchCost, int numDisparities, QImage *segmentImage)
@@ -61,13 +60,13 @@ void MainWindow::Segment(QImage image, int gridSize, int numIterations, double s
 }
 
 /*******************************************************************************
-   Compute initial segmentation of the image using a grid
-        segment - Segment assigned to each pixel
-        numSegments - Number of segments
-        gridSize - Size of the grid-based segments
-        w - Image width
-        h - Image height
+    Compute initial segmentation of the image using a grid
 
+    segment - Segment assigned to each pixel
+    numSegments - Number of segments
+    gridSize - Size of the grid-based segments
+    w - Image width
+    h - Image height
 *******************************************************************************/
 void MainWindow::GridSegmentation(int *segment, int &numSegments, int gridSize, int w, int h)
 {
@@ -92,11 +91,11 @@ void MainWindow::GridSegmentation(int *segment, int &numSegments, int gridSize, 
 }
 
 /*******************************************************************************
-   Draw the image segmentation
-        segmentImage - Image to display the segmentation
-        segment - Segment assigned to each pixel
-        meanColor - The mean color of the segments
+    Draw the image segmentation
 
+    segmentImage - Image to display the segmentation
+    segment - Segment assigned to each pixel
+    meanColor - The mean color of the segments
 *******************************************************************************/
 void MainWindow::DrawSegments(QImage *segmentImage, int *segment, double (*meanColor)[3])
 {
@@ -122,15 +121,15 @@ void MainWindow::DrawSegments(QImage *segmentImage, int *segment, double (*meanC
 }
 
 /*******************************************************************************
-   Display the computed disparities
-        disparities - The disparity for each pixel
-        disparityScale - The amount to scale the disparity for display
-        minDisparity - Minimum disparity
-        disparityImage - Image to display the disparity
-        errorImage - Image to display the error
-        GTImage - The ground truth disparities
-        m_DisparityError - The average error
+    Display the computed disparities
 
+    disparities - The disparity for each pixel
+    disparityScale - The amount to scale the disparity for display
+    minDisparity - Minimum disparity
+    disparityImage - Image to display the disparity
+    errorImage - Image to display the error
+    GTImage - The ground truth disparities
+    m_DisparityError - The average error
 *******************************************************************************/
 void MainWindow::DisplayDisparities(double *disparities, int disparityScale, int minDisparity,
                         QImage *disparityImage, QImage *errorImage, QImage GTImage, double *disparityError)
@@ -184,12 +183,12 @@ void MainWindow::DisplayDisparities(double *disparities, int disparityScale, int
 }
 
 /*******************************************************************************
-   Render warped views between the images
-        image - Image to be warped
-        disparities - The disparities for each pixel
-        disparityScale - The amount to warp the image, usually between 0 and 1
-        renderImage - The final rendered image
+    Render warped views between the images
 
+    image - Image to be warped
+    disparities - The disparities for each pixel
+    disparityScale - The amount to warp the image, usually between 0 and 1
+    renderImage - The final rendered image
 *******************************************************************************/
 void MainWindow::Render(QImage image, double *disparities, double disparityScale, QImage *renderImage)
 {
@@ -306,11 +305,11 @@ void MainWindow::Render(QImage image, double *disparities, double disparityScale
 }
 
 /*******************************************************************************
-   Fill holes in the projected disparities (Render helper function)
-        projDisparity - Projected disparity
-        projDisparityCt - The weight of each projected disparity.  A value of 0 means the pixel doesn't have a disparity
-        w, h - The width and height of the image
+    Fill holes in the projected disparities (Render helper function)
 
+    projDisparity - Projected disparity
+    projDisparityCt - The weight of each projected disparity.  A value of 0 means the pixel doesn't have a disparity
+    w, h - The width and height of the image
 *******************************************************************************/
 void MainWindow::FillHoles(double *projDisparity, double *projDisparityCt, int w, int h)
 {
@@ -345,23 +344,17 @@ void MainWindow::FillHoles(double *projDisparity, double *projDisparityCt, int w
     delete [] bufferCt;
 }
 
-
 /*******************************************************************************
-*******************************************************************************
-*******************************************************************************
-
-    The routines you need to implement are below
-
-*******************************************************************************
-*******************************************************************************
+    IMAGE PROCESSING METHODS
 *******************************************************************************/
 
 /*******************************************************************************
-Compute match cost using Squared Distance
+    Compute match cost using Squared Distance
+
     image1 - Input image 1
     image2 - Input image 2
     minDisparity - Minimum disparity between image 1 and image 2
-    maxDisparity - Minimum disparity between image 1 and image 2
+    maxDisparity - Maximum disparity between image 1 and image 2
     matchCost - The match cost (squared distance) between pixels
 
     To access the match cost at pixel (c, r) at disparity d use
@@ -372,11 +365,38 @@ void MainWindow::SSD(QImage image1, QImage image2, int minDisparity, int maxDisp
     int w = image1.width();
     int h = image1.height();
 
-    // Add your code here
+    // for each pixel
+    for(int r=0;r<h;r++)
+    {
+        for(int c=0;c<w;c++)
+        {
+            for(int d = minDisparity; d<maxDisparity; d++)
+            {
+                // find image 1 and image 2 pixels
+                QRgb p1 = image1.pixel(c, r);
+                QRgb p2 = qRgb(0, 0, 0);
+                if(c-d >= 0)
+                {
+                    p2 = image2.pixel(c-d, r);
+                }
+
+                // compute squared distance on each color channel
+                double rdist = std::pow(qRed(p1)-qRed(p2),2.0);
+                double gdist = std::pow(qGreen(p1)-qGreen(p2),2.0);
+                double bdist = std::pow(qBlue(p1)-qBlue(p2),2.0);
+
+                // combine channels
+                double dist = rdist+gdist+bdist;
+
+                matchCost[(d-minDisparity)*w*h + r*w + c] = dist;
+            }
+        }
+    }
 }
 
 /*******************************************************************************
-Compute match cost using Absolute Distance
+    Compute match cost using Absolute Distance
+
     image1 - Input image 1
     image2 - Input image 2
     minDisparity - Minimum disparity between image 1 and image 2
@@ -388,15 +408,54 @@ Compute match cost using Absolute Distance
 *******************************************************************************/
 void MainWindow::SAD(QImage image1, QImage image2, int minDisparity, int maxDisparity, double *matchCost)
 {
-   int w = image1.width();
-   int h = image1.height();
+    int w = image1.width();
+    int h = image1.height();
 
-   // Add your code here
+    // for each pixel
+    for(int r=0;r<h;r++)
+    {
+        for(int c=0;c<w;c++)
+        {
+            for(int d = minDisparity; d<maxDisparity; d++)
+            {
+                // find image 1 and image 2 pixels
+                QRgb p1 = image1.pixel(c, r);
+                QRgb p2 = qRgb(0, 0, 0);
+                if(c-d >= 0)
+                {
+                    p2 = image2.pixel(c-d, r);
+                }
 
+                // compute absolute distance on each channel
+                double rdist = std::abs(qRed(p1)-qRed(p2));
+                double gdist = std::abs(qGreen(p1)-qGreen(p2));
+                double bdist = std::abs(qBlue(p1)-qBlue(p2));
+
+                // combine distances
+                double dist = rdist+gdist+bdist;
+
+                matchCost[(d-minDisparity)*w*h + r*w + c] = dist;
+            }
+        }
+    }
+}
+
+double ComputeNCC(double v1, double v2)
+{
+    if(v1 == 0 || v2 == 0)
+    {
+        return 0.0;
+    }
+    else
+    {
+        double out = (v1*v2) / (std::sqrt(std::pow(v1,2)*std::pow(v2,2)));
+        return out;
+    }
 }
 
 /*******************************************************************************
-Compute match cost using Normalized Cross Correlation
+    Compute match cost using Normalized Cross Correlation
+
     image1 - Input image 1
     image2 - Input image 2
     minDisparity - Minimum disparity between image 1 and image 2
@@ -407,17 +466,93 @@ Compute match cost using Normalized Cross Correlation
     To access the match cost at pixel (c, r) at disparity d use
     matchCost[d*w*h + r*w + c]
 *******************************************************************************/
-void MainWindow::NCC(QImage image1, QImage image2, int minDisparity, int maxDisparity, int radius, double *matchCost)
+void MainWindow::NCC(QImage image1, QImage image2, int minDisparity, int maxDisparity, 
+    int radius, double *matchCost)
 {
-   int w = image1.width();
-   int h = image1.height();
+    int w = image1.width();
+    int h = image1.height();
 
-   // Add your code here
+    // For NCC (normalized cross correlation) compute the score over a window with the supplied radius.  
+    // Store the computed match cost in “matchCost”.  Each entry in matchCost is the distance in color 
+    // space between (c, r) in image 1 and (c - d, r) in image 2.  Store these values at 
+    // “matchCost[(d – minDisparity)*w*h + r*w + c]”.  Hint: The NCC score is high for good matches and 
+    // low for bad matches, so store one minus the NCC score instead of the NCC score in matchCost.
 
+    // for each pixel
+    for(int r=0;r<h;r++)
+    {
+        for(int c=0;c<w;c++)
+        {
+            for(int d = minDisparity; d<maxDisparity; d++)
+            {
+                double distrm = 0.0;
+                double distgm = 0.0;
+                double distbm = 0.0;
+
+                double distr1s = 0.0;
+                double distg1s = 0.0;
+                double distb1s = 0.0;
+
+                double distr2s = 0.0;
+                double distg2s = 0.0;
+                double distb2s = 0.0;
+
+                // scan window based on radius
+                for(int rd = -radius; rd <= radius; rd++)
+                {
+                    for(int cd = -radius; cd <= radius; cd++)
+                    {
+                        int row = r+rd;
+                        int col = c+cd;
+
+                        // find image 1 and image 2 pixels
+                        QRgb p1 = qRgb(0, 0, 0);
+                        QRgb p2 = qRgb(0, 0, 0);
+
+                        if(row >= 0 && row < h && col >= 0 && col < w)
+                        {
+                            p1 = image1.pixel(col, row);
+                        }
+
+                        if(row >= 0 && row < h && col-d >= 0 && col-d < w)
+                        {
+                            p2 = image2.pixel(col-d, row);
+                        }
+
+                        // sum components of ncc
+                        distrm += qRed(p1)*qRed(p2);
+                        distgm += qGreen(p1)*qGreen(p2); 
+                        distbm += qBlue(p1)*qBlue(p2);
+
+                        distr1s += std::pow(qRed(p1),2.0);
+                        distg1s += std::pow(qGreen(p1),2.0);
+                        distb1s += std::pow(qBlue(p1),2.0);
+
+                        distr2s += std::pow(qRed(p2),2.0);
+                        distg2s += std::pow(qGreen(p2),2.0);
+                        distb2s += std::pow(qBlue(p2),2.0);
+                    }
+                }
+
+                // compute ncc on each channel
+                double nccr = distrm / (std::sqrt(distr1s*distr2s));
+                double nccg = distgm / (std::sqrt(distg1s*distg2s));
+                double nccb = distbm / (std::sqrt(distb1s*distb2s));
+
+                double ncc = (nccr+nccg+nccb)/3.0;
+
+                // normalize and compute cost
+                double cost = 1 - ncc;
+
+                matchCost[(d-minDisparity)*w*h + r*w + c] = cost;
+            }
+        }
+    }
 }
 
 /*******************************************************************************
-Gaussian blur the match score.
+    Gaussian blur the match score.
+
     matchCost - The match cost between pixels
     w, h - The width and height of the image
     numDisparities - The number of disparity levels
@@ -431,7 +566,9 @@ void MainWindow::GaussianBlurMatchScore(double *matchCost, int w, int h, int num
 }
 
 /*******************************************************************************
-Blur a floating piont image using Gaussian kernel (helper function for GaussianBlurMatchScore.)
+    Blur a floating piont image using Gaussian kernel (helper function for 
+    GaussianBlurMatchScore.)
+
     image - Floating point image
     w, h - The width and height of the image
     sigma - The standard deviation of the blur kernel
@@ -446,34 +583,39 @@ void MainWindow::SeparableGaussianBlurImage(double *image, int w, int h, double 
 
 
 /*******************************************************************************
-Bilaterally blur the match score using the colorImage to compute kernel weights
+    Bilaterally blur the match score using the colorImage to compute kernel weights
+
     matchCost - The match cost between pixels
     w, h - The width and height of the image
     numDisparities - The number of disparity levels
     sigmaS, sigmaI - The standard deviation of the blur kernel for spatial and intensity
     colorImage - The color image
 *******************************************************************************/
-void MainWindow::BilateralBlurMatchScore(double *matchCost, int w, int h, int numDisparities,
-                                         double sigmaS, double sigmaI, QImage colorImage)
+void MainWindow::BilateralBlurMatchScore(
+    double *matchCost, int w, int h, int numDisparities,
+    double sigmaS, double sigmaI, QImage colorImage)
 {
     // Add your code here
 }
 
 /*******************************************************************************
-Compute the mean color and position for each segment (helper function for Segment.)
+    Compute the mean color and position for each segment (helper function for Segment.)
+
     image - Color image
     segment - Image segmentation
     numSegments - Number of segments
     meanSpatial - Mean position of segments
     meanColor - Mean color of segments
 *******************************************************************************/
-void MainWindow::ComputeSegmentMeans(QImage image, int *segment, int numSegments, double (*meanSpatial)[2], double (*meanColor)[3])
+void MainWindow::ComputeSegmentMeans(QImage image, int *segment, int numSegments, 
+    double (*meanSpatial)[2], double (*meanColor)[3])
 {
     // Add your code here
 }
 
 /*******************************************************************************
-Assign each pixel to the closest segment using position and color
+    Assign each pixel to the closest segment using position and color
+
     image - Color image
     segment - Image segmentation
     numSegments - Number of segments
@@ -482,15 +624,16 @@ Assign each pixel to the closest segment using position and color
     spatialSigma - Assumed standard deviation of the spatial distribution of pixels in segment
     colorSigma - Assumed standard deviation of the color distribution of pixels in segment
 *******************************************************************************/
-void MainWindow::AssignPixelsToSegments(QImage image, int *segment, int numSegments, double (*meanSpatial)[2], double (*meanColor)[3],
-                            double spatialSigma, double colorSigma)
+void MainWindow::AssignPixelsToSegments(QImage image, int *segment, int numSegments, 
+    double (*meanSpatial)[2], double (*meanColor)[3], double spatialSigma, double colorSigma)
 {
     // Add your code here
 }
 
 /*******************************************************************************
-Update the match cost based ont eh segmentation.  That is, average the match cost
-for each pixel in a segment.
+    Update the match cost based ont eh segmentation.  That is, average the match cost
+    for each pixel in a segment.
+
     segment - Image segmentation
     numSegments - Number of segments
     width, height - Width and height of image
@@ -498,26 +641,47 @@ for each pixel in a segment.
     matchCost - The match cost between pixels
 *******************************************************************************/
 void MainWindow::SegmentAverageMatchCost(int *segment, int numSegments,
-                                         int w, int h, int numDisparities, double *matchCost)
+    int w, int h, int numDisparities, double *matchCost)
 {
     // Add your code here
 }
 
 /*******************************************************************************
-For each pixel find the disparity with minimum match cost
+    For each pixel find the disparity with minimum match cost
+
     matchCost - The match cost between pixels
     disparities - The disparity for each pixel (use disparity[r*w + c])
     width, height - Width and height of image
     minDisparity - The minimum disparity
     numDisparities - Number of disparities
 *******************************************************************************/
-void MainWindow::FindBestDisparity(double *matchCost, double *disparities, int w, int h, int minDisparity, int numDisparities)
+void MainWindow::FindBestDisparity(double *matchCost, double *disparities, int w, int h, 
+    int minDisparity, int numDisparities)
 {
-    // Add your code here
+    for(int r=0;r<h;r++)
+    {
+        for(int c=0;c<w;c++)
+        {
+            int min = minDisparity;
+
+            for(int d = 0; d<numDisparities; d++)
+            {
+                // find lowest disparity
+                if(matchCost[(min)*w*h + r*w + c] > matchCost[(d)*w*h + r*w + c])
+                {
+                    min = d+minDisparity;
+                }
+            }
+
+            // save disparity
+            disparities[r*w + c] = min;
+        }
+    }
 }
 
 /*******************************************************************************
-Create your own "magic" stereo algorithm
+    Create your own "magic" stereo algorithm
+
     image1 - Input image 1
     image2 - Input image 2
     minDisparity - Minimum disparity between image 1 and image 2
@@ -526,7 +690,8 @@ Create your own "magic" stereo algorithm
     param2 - The second paramater to your algorithm
     matchCost - The match cost (squared distance) between pixels
 *******************************************************************************/
-void MainWindow::MagicStereo(QImage image1, QImage image2, int minDisparity, int maxDisparity, double param1, double param2, double *matchCost)
+void MainWindow::MagicStereo(QImage image1, QImage image2, int minDisparity, int maxDisparity, 
+    double param1, double param2, double *matchCost)
 {
     // Add your code here
 
