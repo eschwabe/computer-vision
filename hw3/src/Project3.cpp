@@ -344,6 +344,123 @@ void MainWindow::FillHoles(double *projDisparity, double *projDisparityCt, int w
     delete [] bufferCt;
 }
 
+// -----------------------------------------------------------------------------
+// BUFFER METHODS
+// -----------------------------------------------------------------------------
+
+// Creates a copy of a single channel buffer.
+// Buffer copy must be freed by caller.
+static double* BufferSingleCreateCopy(double *buffer, const int& bWidth, const int& bHeight)
+{
+    // initialize new buffer
+    double *newBuffer = new double[ bWidth * bHeight ];
+
+    for(int r = 0; r < bHeight; r++)
+    {
+        for(int c = 0; c < bWidth; c++)
+        {
+            newBuffer[ (r*bWidth)+c ] = buffer[ (r*bWidth)+c ];
+        }
+    }
+
+    return newBuffer;
+}
+
+// Applies a kernel filter to a single channel buffer. Values are updated in the buffer.
+// The kernel can be any odd numbered height and width in size.
+static void BufferSingleApplyKernel(
+    double *buffer, const int& bWidth, const int& bHeight, 
+    const double* kernel, const int kHeight, const int kWidth)
+{
+    // compute horizontal and vertical kernel radius
+    int kHeightRadius = kHeight/2;
+    int kWidthRadius = kWidth/2;
+
+    // create copy of original buffer
+    double* copyBuffer = BufferSingleCreateCopy(buffer, bWidth, bHeight);
+
+    // for each pixel in the image
+    for(int r=0;r<bHeight;r++)
+    {
+        for(int c=0;c<bWidth;c++)
+        {
+            double outValue = 0.0;
+
+            // convolve the kernel at each pixel
+            for(int rd=-kHeightRadius; rd<=kHeightRadius; rd++)
+            {
+                for(int cd=-kWidthRadius; cd<=kWidthRadius; cd++)
+                {
+                    // get the original pixel value from copy buffer
+                    int pRow = r + (rd);
+                    int pCol = c + (cd);
+
+                    // verify pixel is within buffer range
+                    double p = 0.0;
+                    if(pRow >= 0 && pRow < bHeight && pCol >= 0 && pCol < bWidth)
+                    {
+                        p = copyBuffer[ (pRow*bWidth) + pCol ];
+                    }
+
+                    // get the value of the kernel
+                    double weight = kernel[(rd + kHeightRadius)*kWidth + (cd + kWidthRadius)];
+
+                    // apply weights
+                    outValue += weight*p;
+                }
+            }
+
+            // store mean pixel in the buffer
+            buffer[ (r*bWidth) + c ] = outValue;
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// KERNEL METHODS
+// -----------------------------------------------------------------------------
+
+// Normalize kernel values so the sum of the absolute values is 1
+// Kernel must only contain a single axis (horizontal or vertical)
+static void KernelNormalize(double* kernel, const int& size)
+{
+    double norm = 0.0;
+
+    // compute normal
+    for(int i=0; i<size; i++)
+    {
+        norm += std::abs(kernel[i]);
+    }
+
+    // normalize kernel
+    double net = 0.0;
+    for(int i=0; i<size; i++)
+    {
+        kernel[i] /= norm;
+        net += kernel[i];
+    }
+}
+
+// Build a horizontal/vertical gaussian kernel with the specified sigma, radius, and size
+// Size must be 2*radius+1
+static double* KernelBuildSeperableGaussian(const double& sigma, const int& radius, const int& size) 
+{
+    // create kernel
+    double *kernel = new double [size];
+
+    // compute kernel weights
+    for(int x=-radius; x<=radius; x++)
+    {
+        double value = std::exp( -std::pow((double)x,2) / (2*std::pow(sigma,2)) );
+        kernel[x+radius] = value;
+    }
+
+    // normalize kernel
+    KernelNormalize(kernel, size);
+
+    return kernel;
+}
+
 /*******************************************************************************
     IMAGE PROCESSING METHODS
 *******************************************************************************/
@@ -437,19 +554,6 @@ void MainWindow::SAD(QImage image1, QImage image2, int minDisparity, int maxDisp
                 matchCost[(d-minDisparity)*w*h + r*w + c] = dist;
             }
         }
-    }
-}
-
-double ComputeNCC(double v1, double v2)
-{
-    if(v1 == 0 || v2 == 0)
-    {
-        return 0.0;
-    }
-    else
-    {
-        double out = (v1*v2) / (std::sqrt(std::pow(v1,2)*std::pow(v2,2)));
-        return out;
     }
 }
 
@@ -582,7 +686,12 @@ void MainWindow::NCC(QImage image1, QImage image2, int minDisparity, int maxDisp
 *******************************************************************************/
 void MainWindow::GaussianBlurMatchScore(double *matchCost, int w, int h, int numDisparities, double sigma)
 {
-    // Add your code here
+    // run each disparity through gaussian blur
+    for(int d = 0; d < numDisparities; d++)
+    {
+        double* dispImage = &(matchCost[d*w*h + 0*w + 0]);
+        SeparableGaussianBlurImage(dispImage, w, h, sigma);
+    }
 }
 
 /*******************************************************************************
@@ -597,10 +706,26 @@ void MainWindow::GaussianBlurMatchScore(double *matchCost, int w, int h, int num
 *******************************************************************************/
 void MainWindow::SeparableGaussianBlurImage(double *image, int w, int h, double sigma)
 {
-    // Add your code here
+    int radius = 3;
+    int size = radius*2 + 1;
+
+    // create kernel
+    double* kernel = KernelBuildSeperableGaussian(sigma, radius, size);
+
+    // apply kernel (vertical)
+    BufferSingleApplyKernel(image, w, h, kernel, size, 1);
+
+    // apply kernel (horizontal)
+    BufferSingleApplyKernel(image, w, h, kernel, 1, size);
+
+    delete [] kernel;
 }
 
-
+double PixelMagnitude(const QRgb& p)
+{
+    double mag = (qRed(p) + qGreen(p) + qBlue(p)) / 3.0;
+    return mag;
+}
 
 /*******************************************************************************
     Bilaterally blur the match score using the colorImage to compute kernel weights
@@ -615,7 +740,103 @@ void MainWindow::BilateralBlurMatchScore(
     double *matchCost, int w, int h, int numDisparities,
     double sigmaS, double sigmaI, QImage colorImage)
 {
-    // Add your code here
+    int radius = 3*sigmaS;
+    int size = 2*radius+1;
+
+    // create kernel
+    double* kernel = new double[size*size];
+
+    // create copy of match costs
+    double* matchCostCopy = new double[numDisparities*h*w];
+    for(int i = 0; i<(numDisparities*h*w); i++)
+    {
+        matchCostCopy[i] = matchCost[i];
+    }
+
+    // compute each match cost
+    for(int r = 0; r < h; r++)
+    {
+        for(int c = 0; c < w; c++)
+        {          
+            double norm = 0.0;
+
+            // get original pixel
+            QRgb orgPixel = colorImage.pixel(c, r);
+
+            // generate kernel for pixel
+            // convolve around the pixel
+            for(int rd=-radius;rd<=radius;rd++)
+            {
+                for(int cd=-radius;cd<=radius;cd++)
+                {
+                    int row = r+rd;
+                    int col = c+cd;
+
+                    // find convolution pixel
+                    QRgb convPixel = qRgb(0,0,0);
+                    if(row >= 0 && row < h && col >= 0 && col < w)
+                    {
+                        convPixel = colorImage.pixel(c+cd, r+rd);
+                    }
+                    
+                    // compute range filter (intensity)
+                    double range = std::exp( -std::pow( PixelMagnitude(orgPixel)-PixelMagnitude(convPixel), 2) / (2*std::pow(sigmaI,2)) );
+
+                    // domain filter (guassian)
+                    double domain = std::exp( -(std::pow((double)rd,2) + std::pow((double)cd,2)) / (2*std::pow(sigmaS,2)) );
+
+                    // compute weight, norm, rgb values
+                    double weight = range*domain;
+                    norm += weight;
+
+                    // save weight in kernel
+                    kernel[(rd+radius)*size + (cd+radius)] = weight;
+                }
+            }
+
+            // normalize kernel
+            for(int i = 0; i<size*size; i++)
+            {
+                kernel[i] /= norm;
+            }
+
+            // apply kernel to each cost in each disparity
+            for(int d = 0; d < numDisparities; d++)
+            {
+                double cost = 0.0;
+
+                // convolve around the pixel
+                for(int rd=-radius;rd<=radius;rd++)
+                {
+                    for(int cd=-radius;cd<=radius;cd++)
+                    {
+                        double cCost = 0.0;
+                        int row = r+rd;
+                        int col = c+cd;
+
+                        // get weight
+                        double weight = kernel[(rd+radius)*size + (cd+radius)];
+                        
+                        // get current cost from copy
+                        if(row >= 0 && row < h && col >= 0 && col < w)
+                        {
+                            cCost = matchCostCopy[d*w*h + row*w + col];
+                        }
+
+                        // add weighted cost to total
+                        cost += weight*cCost;
+                    }
+                }
+
+                // save new cost
+                matchCost[d*w*h + r*w + c] = cost;
+            }
+        }
+    }
+
+    // cleanup
+    delete [] kernel;
+    delete [] matchCostCopy;
 }
 
 /*******************************************************************************
