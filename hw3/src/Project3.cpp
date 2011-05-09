@@ -414,6 +414,8 @@ static void BufferSingleApplyKernel(
             buffer[ (r*bWidth) + c ] = outValue;
         }
     }
+
+    delete [] copyBuffer;
 }
 
 // -----------------------------------------------------------------------------
@@ -461,6 +463,16 @@ static double* KernelBuildSeperableGaussian(const double& sigma, const int& radi
     return kernel;
 }
 
+// -----------------------------------------------------------------------------
+// PIXEL METHODS
+// -----------------------------------------------------------------------------
+
+double PixelMagnitude(const QRgb& p)
+{
+    double mag = (qRed(p) + qGreen(p) + qBlue(p)) / 3.0;
+    return mag;
+}
+
 /*******************************************************************************
     IMAGE PROCESSING METHODS
 *******************************************************************************/
@@ -503,7 +515,7 @@ void MainWindow::SSD(QImage image1, QImage image2, int minDisparity, int maxDisp
                 double bdist = std::pow(qBlue(p1)-qBlue(p2),2.0);
 
                 // combine channels
-                double dist = rdist+gdist+bdist;
+                double dist = std::sqrt(std::pow(rdist,2.0) + std::pow(gdist,2.0) + std::pow(bdist,2.0));
 
                 matchCost[(d-minDisparity)*w*h + r*w + c] = dist;
             }
@@ -549,7 +561,7 @@ void MainWindow::SAD(QImage image1, QImage image2, int minDisparity, int maxDisp
                 double bdist = std::abs(qBlue(p1)-qBlue(p2));
 
                 // combine distances
-                double dist = rdist+gdist+bdist;
+                double dist = std::sqrt(std::pow(rdist,2.0) + std::pow(gdist,2.0) + std::pow(bdist,2.0));
 
                 matchCost[(d-minDisparity)*w*h + r*w + c] = dist;
             }
@@ -658,15 +670,21 @@ void MainWindow::NCC(QImage image1, QImage image2, int minDisparity, int maxDisp
                     }
                 }
 
+                double cost = 1.0;
+
                 // compute ncc on each channel
-                double nccr = distrm / (std::sqrt(distr1s*distr2s));
-                double nccg = distgm / (std::sqrt(distg1s*distg2s));
-                double nccb = distbm / (std::sqrt(distb1s*distb2s));
+                if(distr1s != 0.0 && distg1s != 0.0 && distb1s != 0.0 && 
+                    distr2s != 0.0 && distg2s != 0.0 && distb2s != 0.0)
+                {
+                    double nccr = distrm / (std::sqrt(distr1s*distr2s));
+                    double nccg = distgm / (std::sqrt(distg1s*distg2s));
+                    double nccb = distbm / (std::sqrt(distb1s*distb2s));
 
-                double ncc = (nccr+nccg+nccb)/3.0;
+                    double ncc = (nccr+nccg+nccb)/3.0;
 
-                // normalize and compute cost
-                double cost = 1 - ncc;
+                    // normalize and compute cost
+                    cost = 1 - ncc;
+                }
 
                 matchCost[(d-minDisparity)*w*h + r*w + c] = cost;
             }
@@ -706,25 +724,17 @@ void MainWindow::GaussianBlurMatchScore(double *matchCost, int w, int h, int num
 *******************************************************************************/
 void MainWindow::SeparableGaussianBlurImage(double *image, int w, int h, double sigma)
 {
-    int radius = 3;
+    int radius = 3*sigma;
     int size = radius*2 + 1;
 
     // create kernel
     double* kernel = KernelBuildSeperableGaussian(sigma, radius, size);
 
-    // apply kernel (vertical)
+    // apply kernel (horizontal and vertical)
+    BufferSingleApplyKernel(image, w, h, kernel, 1, size);
     BufferSingleApplyKernel(image, w, h, kernel, size, 1);
 
-    // apply kernel (horizontal)
-    BufferSingleApplyKernel(image, w, h, kernel, 1, size);
-
     delete [] kernel;
-}
-
-double PixelMagnitude(const QRgb& p)
-{
-    double mag = (qRed(p) + qGreen(p) + qBlue(p)) / 3.0;
-    return mag;
 }
 
 /*******************************************************************************
