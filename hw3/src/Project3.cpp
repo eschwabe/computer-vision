@@ -2,6 +2,7 @@
 #include "math.h"
 #include "ui_mainwindow.h"
 #include <QtGui>
+#include <cmath>
 
 /*******************************************************************************
     HELPER METHODS
