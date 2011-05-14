@@ -516,7 +516,7 @@ void MainWindow::SSD(QImage image1, QImage image2, int minDisparity, int maxDisp
                 double bdist = std::pow(qBlue(p1)-qBlue(p2),2.0);
 
                 // combine channels
-                double dist = std::sqrt(std::pow(rdist,2.0) + std::pow(gdist,2.0) + std::pow(bdist,2.0));
+                double dist = std::sqrt(rdist + gdist + bdist);
 
                 matchCost[(d-minDisparity)*w*h + r*w + c] = dist;
             }
@@ -862,7 +862,53 @@ void MainWindow::BilateralBlurMatchScore(
 void MainWindow::ComputeSegmentMeans(QImage image, int *segment, int numSegments, 
     double (*meanSpatial)[2], double (*meanColor)[3])
 {
-    // Add your code here
+    int w = image.width();
+    int h = image.height();
+
+    int* numPixels = new int[numSegments];
+
+    // initialize means and pixel count
+    for(int i = 0; i < numSegments; i++)
+    {
+        meanSpatial[i][0] = 0.0;
+        meanSpatial[i][1] = 0.0;
+        meanColor[i][0] = 0.0;
+        meanColor[i][1] = 0.0;
+        meanColor[i][2] = 0.0;
+        numPixels[i] = 0;
+    }
+
+    // compute each match cost
+    for(int r = 0; r < h; r++)
+    {
+        for(int c = 0; c < w; c++)
+        {  
+            // find segment number for pixel
+            int seg = segment[r*w+c];
+
+            QRgb pix = image.pixel(c, r);
+
+            // add means and count
+            meanSpatial[seg][0] += r;
+            meanSpatial[seg][1] += c;
+            meanColor[seg][0] += qRed(pix);
+            meanColor[seg][1] += qGreen(pix);
+            meanColor[seg][2] += qBlue(pix);
+            numPixels[seg]++;
+        }
+    }
+
+    // compute means
+    for(int i = 0; i < numSegments; i++)
+    {
+        meanSpatial[i][0] /= numPixels[i];
+        meanSpatial[i][1] /= numPixels[i];
+        meanColor[i][0] /= numPixels[i];
+        meanColor[i][1] /= numPixels[i];
+        meanColor[i][2] /= numPixels[i];
+    }
+
+    delete [] numPixels;
 }
 
 /*******************************************************************************
@@ -879,11 +925,54 @@ void MainWindow::ComputeSegmentMeans(QImage image, int *segment, int numSegments
 void MainWindow::AssignPixelsToSegments(QImage image, int *segment, int numSegments, 
     double (*meanSpatial)[2], double (*meanColor)[3], double spatialSigma, double colorSigma)
 {
-    // Add your code here
+    int w = image.width();
+    int h = image.height();
+
+    double sqSpatialSigma = std::pow(spatialSigma,2.0);
+    double sqColorSigma = std::pow(colorSigma,2.0);
+
+    // compute the closest segment for each pixel
+    for(int r = 0; r < h; r++)
+    {
+        for(int c = 0; c < w; c++)
+        {
+            int seg = -1;
+            double segDPos = 0.0;
+            double segDColor = 0.0;
+
+            QRgb pixel = image.pixel(c, r);
+
+            // check each segment
+            for(int i = 0; i < numSegments; i++)
+            {
+                // position
+                double dy = std::pow( (r-meanSpatial[i][0])/sqSpatialSigma, 2.0);
+                double dx = std::pow( (c-meanSpatial[i][1])/sqSpatialSigma, 2.0);
+                double dPos = std::sqrt(dy+dx);
+
+                // color
+                double dr = std::pow( (qRed(pixel)-meanColor[i][0])/sqColorSigma, 2.0);
+                double dg = std::pow( (qGreen(pixel)-meanColor[i][1])/sqColorSigma, 2.0);
+                double db = std::pow( (qBlue(pixel)-meanColor[i][2])/sqColorSigma, 2.0);
+                double dColor = std::sqrt(dr+dg+db);
+
+                // compare and update
+                if( seg == -1 || (dPos+dColor) < (segDPos+segDColor) )
+                {
+                    seg = i;
+                    segDPos = dPos;
+                    segDColor = dColor;
+                }
+            }
+
+            // assign segment
+            segment[r*w+c] = seg;
+        }
+    }
 }
 
 /*******************************************************************************
-    Update the match cost based ont eh segmentation.  That is, average the match cost
+    Update the match cost based on the segmentation. That is, average the match cost
     for each pixel in a segment.
 
     segment - Image segmentation
@@ -895,7 +984,47 @@ void MainWindow::AssignPixelsToSegments(QImage image, int *segment, int numSegme
 void MainWindow::SegmentAverageMatchCost(int *segment, int numSegments,
     int w, int h, int numDisparities, double *matchCost)
 {
-    // Add your code here
+    // for each segment
+    for(int seg = 0; seg < numSegments; seg++)
+    {
+        // for each disparity 
+        for(int d = 0; d < numDisparities; d++)
+        {
+            double newMatchCost = 0.0;
+            int pixelCount = 0;
+
+            // compute new match cost from pixels in the segment
+            for(int r = 0; r < h; r++)
+            {
+                for(int c = 0; c < w; c++)
+                {
+                    // check if in segment
+                    if(segment[r*w+c] == seg)
+                    {
+                        newMatchCost += matchCost[(d)*w*h + r*w + c];
+                        pixelCount++;
+                    }
+                }
+            }
+
+            // average match cost
+            newMatchCost /= pixelCount;
+
+            // set match cost for each pixel in the segment
+            for(int r = 0; r < h; r++)
+            {
+                for(int c = 0; c < w; c++)
+                {
+                    // check if in segment
+                    if(segment[r*w+c] == seg)
+                    {
+                        // set cost
+                        matchCost[(d)*w*h + r*w + c] = newMatchCost;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /*******************************************************************************
@@ -921,7 +1050,7 @@ void MainWindow::FindBestDisparity(double *matchCost, double *disparities, int w
             for(int d = 0; d<numDisparities; d++)
             {
                 // check if cost is lower at this disparity
-                if(matchCost[(min)*w*h + r*w + c] > matchCost[(d)*w*h + r*w + c])
+                if(matchCost[(min-minDisparity)*w*h + r*w + c] > matchCost[(d)*w*h + r*w + c])
                 {
                     min = d+minDisparity;
                 }
