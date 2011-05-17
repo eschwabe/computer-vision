@@ -19,8 +19,9 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->bilateralButton, SIGNAL(clicked()), this, SLOT(Bilateral()));
     connect(ui->segmentButton, SIGNAL(clicked()), this, SLOT(Segment()));
     connect(ui->renderButton, SIGNAL(clicked()), this, SLOT(Render()));
-    connect(ui->renderSlider, SIGNAL(valueChanged(int)), this, SLOT(RenderSlider(int)));
-    connect(ui->magicButton, SIGNAL(valueChanged(int)), this, SLOT(MagicStereo(int)));
+    connect(ui->renderSlider, SIGNAL(valueChanged(int)), this, SLOT(RenderSlider(int)));    
+    connect(ui->magicButton, SIGNAL(clicked()), this, SLOT(MagicStereo()));
+
 
     ui->GTCheckBox->setChecked(true);
     ui->pixelErrorLabel->setText("");
@@ -395,7 +396,8 @@ void MainWindow::DrawLine(int r)
     {
         for(c=0;c<w;c++)
         {
-            pixel = m_GTDisplayImage.pixel(c, r);
+            if(!m_GTDisplayImage.isNull())
+                pixel = m_GTDisplayImage.pixel(c, r);
             d = qGreen(pixel)/m_DisparityScale;
 
             m_MatchCostDisplay.setPixel(c, d, qRgb(255, 0, 0));

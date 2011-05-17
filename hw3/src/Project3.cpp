@@ -505,9 +505,10 @@ void MainWindow::SSD(QImage image1, QImage image2, int minDisparity, int maxDisp
                 // find image 1 and image 2 pixels
                 QRgb p1 = image1.pixel(c, r);
                 QRgb p2 = qRgb(0, 0, 0);
-                if(c-d >= 0)
+                int dCol = c-d;
+                if(dCol >= 0 && dCol < w)
                 {
-                    p2 = image2.pixel(c-d, r);
+                    p2 = image2.pixel(dCol, r);
                 }
 
                 // compute squared distance on each color channel
@@ -551,9 +552,10 @@ void MainWindow::SAD(QImage image1, QImage image2, int minDisparity, int maxDisp
                 // find image 1 and image 2 pixels
                 QRgb p1 = image1.pixel(c, r);
                 QRgb p2 = qRgb(0, 0, 0);
-                if(c-d >= 0)
+                int dCol = c-d;
+                if(dCol >= 0 && dCol < w)
                 {
-                    p2 = image2.pixel(c-d, r);
+                    p2 = image2.pixel(dCol, r);
                 }
 
                 // compute absolute distance on each channel
