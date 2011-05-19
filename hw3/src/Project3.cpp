@@ -1064,6 +1064,78 @@ void MainWindow::FindBestDisparity(double *matchCost, double *disparities, int w
     }
 }
 
+// F
+static double F(double input)
+{
+	if(input>0.008856)
+		return (pow(input, 0.333333333));
+	else
+		return (7.787*input+0.137931034);
+}
+
+// RGB -> XYZ
+static void RGBtoXYZ(double R, double G, double B, double &X, double &Y, double &Z)
+{
+	X=0.412453*R+0.357580*G+0.189423*B;
+	Y=0.212671*R+0.715160*G+0.072169*B;
+	Z=0.019334*R+0.119193*G+0.950227*B;
+}
+
+// XYZ -> CIELab
+static void XYZtoLab(double X, double Y, double Z, double &L, double &a, double &b)
+{
+	const double Xo=244.66128;
+	const double Yo=255.0;
+	const double Zo=277.63227;
+	L=116*F(Y/Yo)-16;
+	a=500*(F(X/Xo)-F(Y/Yo));
+	b=200*(F(Y/Yo)-F(Z/Zo));
+}
+
+// RGB -> CIELab
+static void RGBtoLab(double R, double G, double B, double &L, double &a, double &b)
+{
+	double X, Y, Z;
+	RGBtoXYZ(R, G, B, X, Y, Z);
+	XYZtoLab(X, Y, Z, L, a, b);
+}
+
+/*******************************************************************************
+    Compute the support weight for the adaptive support-weight approach.
+*******************************************************************************/
+static double ComputeSupportWeight(QRgb p, int px, int py, QRgb q, int qx, int qy, double colorWeight, double spatialWeight)
+{
+    double Lp, ap, bp;
+    double Lq, aq, bq;
+
+    // convert to CIELab color space
+    RGBtoLab(qRed(p), qGreen(p), qBlue(p), Lp, ap, bp);
+    RGBtoLab(qRed(q), qGreen(q), qBlue(q), Lq, aq, bq);
+
+    double colorDist = std::sqrt( std::pow(Lp-Lq, 2.0) + std::pow(ap-aq, 2.0) + std::pow(bp-bq, 2.0) );
+    //double colorDist = std::sqrt( std::pow(qRed(p)-qRed(q), 2.0) + std::pow(qGreen(p)-qGreen(q), 2.0) + std::pow(qBlue(p)-qBlue(q), 2.0) );
+
+    double spatialDist = std::sqrt( std::pow(px-qx, 2.0) + std::pow(py-qy, 2.0) );
+
+    double result = std::exp( -((colorDist/colorWeight) + (spatialDist/spatialWeight)) );
+
+    return result;
+}
+
+/*******************************************************************************
+    Compute the raw matching cost between image 1 and image 2 window pixels
+*******************************************************************************/
+static double ComputeRawCost(QRgb q1, QRgb q2, double trunc)
+{
+    double redCost = std::abs(qRed(q1)-qRed(q2));
+    double greenCost = std::abs(qGreen(q1)-qGreen(q2));
+    double blueCost = std::abs(qBlue(q1)-qBlue(q2));
+
+    double cost = std::min( (redCost+greenCost+blueCost), trunc );
+
+    return cost;
+}
+
 /*******************************************************************************
     Create your own "magic" stereo algorithm
 
@@ -1078,6 +1150,84 @@ void MainWindow::FindBestDisparity(double *matchCost, double *disparities, int w
 void MainWindow::MagicStereo(QImage image1, QImage image2, int minDisparity, int maxDisparity, 
     double param1, double param2, double *matchCost)
 {
-    // Add your code here
+    int w = image1.width();
+    int h = image1.height();
 
+    int radius = 5;         // optimal window = 35x35
+    int size = radius*2+1;  // window size
+    int trunc = 400;        // matching cost truncation
+
+    double* image1SupportWeights = new double[w*h*size];
+    double* image2SupportWeights = new double[w*h*size];
+
+    // for each pixel
+    for(int r=0;r<h;r++)
+    {
+        for(int c=0;c<w;c++)
+        {
+            for(int d = minDisparity; d<maxDisparity; d++)
+            {
+                double sumNumerator = 0.0;
+                double sumDenominator = 0.0;
+
+                // scan window based on radius
+                for(int rd = -radius; rd <= radius; rd++)
+                {
+                    for(int cd = -radius; cd <= radius; cd++)
+                    {
+                        // compute pixel rows and cols
+                        int image1pRow = r;
+                        int image1pCol = c;
+                        int image1qRow = r+rd;
+                        int image1qCol = c+cd;
+
+                        int image2pRow = r;
+                        int image2pCol = c-d;
+                        int image2qRow = r+rd;
+                        int image2qCol = c+cd-d;
+
+                        // find image 1 and image 2 pixels
+                        QRgb image1p = qRgb(0, 0, 0);
+                        QRgb image1q = qRgb(0, 0, 0);
+                        QRgb image2p = qRgb(0, 0, 0);
+                        QRgb image2q = qRgb(0, 0, 0);
+
+                        // reference pixel
+                        if(image1pRow >= 0 && image1pRow < h && image1pCol >= 0 && image1pCol < w)
+                            image1p = image1.pixel(image1pCol, image1pRow);
+
+                        // reference window pixel
+                        if(image1qRow >= 0 && image1qRow < h && image1qCol >= 0 && image1qCol < w)
+                            image1q = image1.pixel(image1qCol, image1qRow);
+
+                        // target pixel
+                        if(image2pRow >= 0 && image2pRow < h && image2pCol >= 0 && image2pCol < w)
+                            image2p = image2.pixel(image2pCol, image2pRow);
+
+                        // target window pixel
+                        if(image2qRow >= 0 && image2qRow < h && image2qCol >= 0 && image2qCol < w)
+                            image2q = image2.pixel(image2qCol, image2qRow);
+
+                        // compute weight of reference (image 1) and target (image 2)
+                        double refWeight = ComputeSupportWeight(image1p, image1pCol, image1pRow, image1q, image1qCol, image1qRow, param1, param2);
+                        double tarWeight = ComputeSupportWeight(image2p, image2pCol, image2pRow, image2q, image2qCol, image2qRow, param1, param2);
+
+                        // compute raw matching cost
+                        double rawCost = ComputeRawCost(image1q, image2q, trunc);
+
+                        // add costs
+                        double combinedWeights = refWeight*tarWeight;
+                        sumNumerator += (combinedWeights*rawCost);
+                        sumDenominator += combinedWeights;
+                    }
+                }
+
+                // compute final cost
+                double cost = sumNumerator / sumDenominator;
+
+                // save cost
+                matchCost[(d-minDisparity)*w*h + r*w + c] = cost;
+            }
+        }
+    }
 }
