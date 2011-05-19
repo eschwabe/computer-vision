@@ -4,6 +4,48 @@
 #include <QtGui>
 #include <cmath>
 
+
+/*******************************************************************************
+    RGB TO CIELab CONVERSION METHODS
+    Copied from: http://www.csee.wvu.edu/~xinl/source.html
+*******************************************************************************/
+
+// F
+static double F(double input)
+{
+	if(input>0.008856)
+		return (pow(input, 0.333333333));
+	else
+		return (7.787*input+0.137931034);
+}
+
+// RGB -> XYZ
+static void RGBtoXYZ(double R, double G, double B, double &X, double &Y, double &Z)
+{
+	X=0.412453*R+0.357580*G+0.189423*B;
+	Y=0.212671*R+0.715160*G+0.072169*B;
+	Z=0.019334*R+0.119193*G+0.950227*B;
+}
+
+// XYZ -> CIELab
+static void XYZtoLab(double X, double Y, double Z, double &L, double &a, double &b)
+{
+	const double Xo=244.66128;
+	const double Yo=255.0;
+	const double Zo=277.63227;
+	L=116*F(Y/Yo)-16;
+	a=500*(F(X/Xo)-F(Y/Yo));
+	b=200*(F(Y/Yo)-F(Z/Zo));
+}
+
+// RGB -> CIELab
+static void RGBtoLab(double R, double G, double B, double &L, double &a, double &b)
+{
+	double X, Y, Z;
+	RGBtoXYZ(R, G, B, X, Y, Z);
+	XYZtoLab(X, Y, Z, L, a, b);
+}
+
 /*******************************************************************************
     HELPER METHODS
 *******************************************************************************/
@@ -1064,55 +1106,57 @@ void MainWindow::FindBestDisparity(double *matchCost, double *disparities, int w
     }
 }
 
-// F
-static double F(double input)
-{
-	if(input>0.008856)
-		return (pow(input, 0.333333333));
-	else
-		return (7.787*input+0.137931034);
-}
+/*******************************************************************************
+    CIELab Color Space
+*******************************************************************************/
+struct CIELab {
+    double L;
+    double a;
+    double b;
+};
 
-// RGB -> XYZ
-static void RGBtoXYZ(double R, double G, double B, double &X, double &Y, double &Z)
+/*******************************************************************************
+    Convert each pixel in the image from RGB to CIELab color space
+*******************************************************************************/
+static CIELab* ConvertImageToLab(QImage image)
 {
-	X=0.412453*R+0.357580*G+0.189423*B;
-	Y=0.212671*R+0.715160*G+0.072169*B;
-	Z=0.019334*R+0.119193*G+0.950227*B;
-}
+    int w = image.width();
+    int h = image.height();
 
-// XYZ -> CIELab
-static void XYZtoLab(double X, double Y, double Z, double &L, double &a, double &b)
-{
-	const double Xo=244.66128;
-	const double Yo=255.0;
-	const double Zo=277.63227;
-	L=116*F(Y/Yo)-16;
-	a=500*(F(X/Xo)-F(Y/Yo));
-	b=200*(F(Y/Yo)-F(Z/Zo));
-}
+    CIELab* lab = new CIELab[w*h];
 
-// RGB -> CIELab
-static void RGBtoLab(double R, double G, double B, double &L, double &a, double &b)
-{
-	double X, Y, Z;
-	RGBtoXYZ(R, G, B, X, Y, Z);
-	XYZtoLab(X, Y, Z, L, a, b);
+    // for each pixel
+    for(int r=0;r<h;r++)
+    {
+        for(int c=0;c<w;c++)
+        {
+            double L;
+            double a;
+            double b;
+
+            // get pixel
+            QRgb pixel = image.pixel(c, r);
+
+            // convert
+            RGBtoLab(qRed(pixel), qGreen(pixel), qBlue(pixel), L, a, b);
+
+            // store
+            lab[r*w + c].L = L;
+            lab[r*w + c].a = a;
+            lab[r*w + c].b = b;
+        }
+    }
+
+    return lab;
 }
 
 /*******************************************************************************
     Compute the support weight for the adaptive support-weight approach.
 *******************************************************************************/
-static double ComputeSupportWeight(QRgb p, int px, int py, QRgb q, int qx, int qy, double colorWeight, double spatialWeight)
+static double ComputeSupportWeight(CIELab p, int px, int py, CIELab q, int qx, int qy, double colorWeight, double spatialWeight)
 {
-    double Lp, ap, bp;
-    double Lq, aq, bq;
-
-    // convert to CIELab color space
-    RGBtoLab(qRed(p), qGreen(p), qBlue(p), Lp, ap, bp);
-    RGBtoLab(qRed(q), qGreen(q), qBlue(q), Lq, aq, bq);
-
-    double colorDist = std::sqrt( std::pow(Lp-Lq, 2.0) + std::pow(ap-aq, 2.0) + std::pow(bp-bq, 2.0) );
+    double colorDist = std::sqrt( std::pow(p.L-q.L, 2.0) + std::pow(p.a-q.a, 2.0) + std::pow(p.b-q.b, 2.0) );
+    
     //double colorDist = std::sqrt( std::pow(qRed(p)-qRed(q), 2.0) + std::pow(qGreen(p)-qGreen(q), 2.0) + std::pow(qBlue(p)-qBlue(q), 2.0) );
 
     double spatialDist = std::sqrt( std::pow(px-qx, 2.0) + std::pow(py-qy, 2.0) );
@@ -1120,6 +1164,62 @@ static double ComputeSupportWeight(QRgb p, int px, int py, QRgb q, int qx, int q
     double result = std::exp( -((colorDist/colorWeight) + (spatialDist/spatialWeight)) );
 
     return result;
+}
+
+/*******************************************************************************
+    Convert each pixel in the image into an array of support weights
+*******************************************************************************/
+static double* ConvertImageToWeights(QImage image, const int radius, const double colorWeight, const double spatialWeight)
+{
+    int w = image.width();
+    int h = image.height();
+
+    int size = radius*2 + 1;
+
+    double* weights = new double[w*h*size*size];
+
+    // convert image to CIELab color space
+    CIELab* imageLab = ConvertImageToLab(image);
+
+    // for each pixel
+    for(int r=0;r<h;r++)
+    {
+        for(int c=0;c<w;c++)
+        {
+            // compute entire window
+            for(int rd = -radius; rd <= radius; rd++)
+            {
+                for(int cd = -radius; cd <= radius; cd++)
+                {
+                    // compute pixel rows and cols
+                    int pRow = r;
+                    int pCol = c;
+                    int qRow = r+rd;
+                    int qCol = c+cd;
+
+                    CIELab pLab = {0.0, 0.0, 0.0};
+                    CIELab qLab = {0.0, 0.0, 0.0};
+
+                    // get pixel values
+                    if(pRow >= 0 && pRow < h && pCol >= 0 && pCol < w)
+                        pLab = imageLab[pRow*w + pCol];
+
+                    if(qRow >= 0 && qRow < h && qCol >= 0 && qCol < w)
+                        qLab = imageLab[qRow*w + qCol];
+
+                    // compute support weight
+                    double sWeight = ComputeSupportWeight(pLab, pCol, pRow, qLab, qCol, qRow, colorWeight, spatialWeight);
+
+                    int windowPos = (rd+radius)*size + (cd+radius);
+                    weights[r*w + c + windowPos] = sWeight;
+                }
+            }
+        }
+    }
+
+    delete [] imageLab;
+
+    return weights;
 }
 
 /*******************************************************************************
@@ -1153,12 +1253,13 @@ void MainWindow::MagicStereo(QImage image1, QImage image2, int minDisparity, int
     int w = image1.width();
     int h = image1.height();
 
-    int radius = 5;         // optimal window = 35x35
+    int radius = 10;        // optimal window = 35x35
     int size = radius*2+1;  // window size
-    int trunc = 400;        // matching cost truncation
+    double trunc = 40;      // matching cost truncation
 
-    double* image1SupportWeights = new double[w*h*size];
-    double* image2SupportWeights = new double[w*h*size];
+    // convert images to support weights
+    double* image1SupportWeights = ConvertImageToWeights(image1, radius, param1, param2);
+    double* image2SupportWeights = ConvertImageToWeights(image2, radius, param1, param2);
 
     // for each pixel
     for(int r=0;r<h;r++)
@@ -1186,34 +1287,38 @@ void MainWindow::MagicStereo(QImage image1, QImage image2, int minDisparity, int
                         int image2qRow = r+rd;
                         int image2qCol = c+cd-d;
 
-                        // find image 1 and image 2 pixels
-                        QRgb image1p = qRgb(0, 0, 0);
+                        // get image 1 and image 2 weights
+                        double refWeight = 0.0;
+                        double tarWeight = 0.0;
+                        
+                        int windowPos = (rd+radius)*size + (cd+radius);
+                        
+                        // reference weight
+                        if(image1pRow >= 0 && image1pRow < h && image1pCol >= 0 && image1pCol < w)
+                            refWeight = image1SupportWeights[(image1pRow*w + image1pCol) + windowPos];
+
+                        // target weight
+                        if(image2pRow >= 0 && image2pRow < h && image2pCol >= 0 && image2pCol < w)
+                            tarWeight = image2SupportWeights[(image2pRow*w + image2pCol) + windowPos];
+
+                        // find image 1 and image 2 q pixels
                         QRgb image1q = qRgb(0, 0, 0);
-                        QRgb image2p = qRgb(0, 0, 0);
                         QRgb image2q = qRgb(0, 0, 0);
 
-                        // reference pixel
-                        if(image1pRow >= 0 && image1pRow < h && image1pCol >= 0 && image1pCol < w)
-                            image1p = image1.pixel(image1pCol, image1pRow);
-
-                        // reference window pixel
+                        // reference window q pixel
                         if(image1qRow >= 0 && image1qRow < h && image1qCol >= 0 && image1qCol < w)
                             image1q = image1.pixel(image1qCol, image1qRow);
 
-                        // target pixel
-                        if(image2pRow >= 0 && image2pRow < h && image2pCol >= 0 && image2pCol < w)
-                            image2p = image2.pixel(image2pCol, image2pRow);
-
-                        // target window pixel
+                        // target window q pixel
                         if(image2qRow >= 0 && image2qRow < h && image2qCol >= 0 && image2qCol < w)
                             image2q = image2.pixel(image2qCol, image2qRow);
 
-                        // compute weight of reference (image 1) and target (image 2)
-                        double refWeight = ComputeSupportWeight(image1p, image1pCol, image1pRow, image1q, image1qCol, image1qRow, param1, param2);
-                        double tarWeight = ComputeSupportWeight(image2p, image2pCol, image2pRow, image2q, image2qCol, image2qRow, param1, param2);
+                        // compute raw matching cost between q pixels
+                        double redCost = std::abs(qRed(image1q)-qRed(image2q));
+                        double greenCost = std::abs(qGreen(image1q)-qGreen(image2q));
+                        double blueCost = std::abs(qBlue(image1q)-qBlue(image2q));
 
-                        // compute raw matching cost
-                        double rawCost = ComputeRawCost(image1q, image2q, trunc);
+                        double rawCost = std::min( (redCost+greenCost+blueCost), trunc );
 
                         // add costs
                         double combinedWeights = refWeight*tarWeight;
@@ -1223,11 +1328,16 @@ void MainWindow::MagicStereo(QImage image1, QImage image2, int minDisparity, int
                 }
 
                 // compute final cost
-                double cost = sumNumerator / sumDenominator;
+                double cost = 0.0;
+                if(sumDenominator != 0.0)
+                    cost = sumNumerator / sumDenominator;
 
                 // save cost
                 matchCost[(d-minDisparity)*w*h + r*w + c] = cost;
             }
         }
     }
+    
+    delete [] image1SupportWeights;
+    delete [] image2SupportWeights;
 }
