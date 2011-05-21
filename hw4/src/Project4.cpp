@@ -1,22 +1,22 @@
-
 #include "mainwindow.h"
 #include "math.h"
 #include "ui_mainwindow.h"
 #include <QtGui>
 
 /*******************************************************************************
-    The following are helper routines with code already written.
-    The routines you'll need to write for the assignment are below.
+The following are helper routines with code already written.
+The routines you'll need to write for the assignment are below.
 *******************************************************************************/
 
 /*******************************************************************************
-    Open the training dataset
-        posdirectory - Directory containing face images
-        negdirectory - Directory containing non-face images
-        trainingData - Array used to store the data
-        trainingLabel - Label assigned to training data (1 = face, 0 = non-face)
-        numTrainingExamples - Number of training examples
-        patchSize - Size of training patches
+Open the training dataset
+
+posdirectory - Directory containing face images
+negdirectory - Directory containing non-face images
+trainingData - Array used to store the data
+trainingLabel - Label assigned to training data (1 = face, 0 = non-face)
+numTrainingExamples - Number of training examples
+patchSize - Size of training patches
 *******************************************************************************/
 void MainWindow::OpenDataSet(QDir posdirectory, QDir negdirectory, double *trainingData, int *trainingLabel, int numTrainingExamples, int patchSize)
 {
@@ -31,54 +31,55 @@ void MainWindow::OpenDataSet(QDir posdirectory, QDir negdirectory, double *train
 
     for(i=0;i<imgNames.length();i++)
         if(idx < numTrainingExamples/2)
-    {
-        inImage.load(posdirectory.absolutePath() + "\\" + imgNames.at(i));
-
-        if(!(inImage.isNull()))
         {
-            for(r=0;r<patchSize;r++)
-                for(c=0;c<patchSize;c++)
-                {
-                    pixel = inImage.pixel(c, r);
-                    trainingData[idx*patchSize*patchSize + r*patchSize + c] = (double) qGreen(pixel);
-                }
+            inImage.load(posdirectory.absolutePath() + "\\" + imgNames.at(i));
 
-            trainingLabel[idx] = 1;
+            if(!(inImage.isNull()))
+            {
+                for(r=0;r<patchSize;r++)
+                    for(c=0;c<patchSize;c++)
+                    {
+                        pixel = inImage.pixel(c, r);
+                        trainingData[idx*patchSize*patchSize + r*patchSize + c] = (double) qGreen(pixel);
+                    }
 
-            idx++;
+                    trainingLabel[idx] = 1;
+
+                    idx++;
+            }
         }
-    }
 
-    imgNames = negdirectory.entryList();
+        imgNames = negdirectory.entryList();
 
-    for(i=0;i<imgNames.length();i++)
-        if(idx < numTrainingExamples)
-    {
-        inImage.load(negdirectory.absolutePath() + "\\" + imgNames.at(i));
+        for(i=0;i<imgNames.length();i++)
+            if(idx < numTrainingExamples)
+            {
+                inImage.load(negdirectory.absolutePath() + "\\" + imgNames.at(i));
 
-        if(!(inImage.isNull()))
-        {
-            for(r=0;r<patchSize;r++)
-                for(c=0;c<patchSize;c++)
+                if(!(inImage.isNull()))
                 {
-                    pixel = inImage.pixel(c, r);
-                    trainingData[idx*patchSize*patchSize + r*patchSize + c] = (double) qGreen(pixel);
+                    for(r=0;r<patchSize;r++)
+                        for(c=0;c<patchSize;c++)
+                        {
+                            pixel = inImage.pixel(c, r);
+                            trainingData[idx*patchSize*patchSize + r*patchSize + c] = (double) qGreen(pixel);
+                        }
+
+                        trainingLabel[idx] = 0;
+
+                        idx++;
                 }
-
-            trainingLabel[idx] = 0;
-
-            idx++;
-        }
-    }
+            }
 }
 
 /*******************************************************************************
-    DisplayTrainingDataset - Display example patches from training dataset
-        displayImage - Display image
-        trainingData - Array used to store the data
-        trainingLabel - Label assigned to training data (1 = face, 0 = non-face)
-        numTrainingExamples - Number of training examples
-        patchSize - Size of training patches
+DisplayTrainingDataset - Display example patches from training dataset
+
+displayImage - Display image
+trainingData - Array used to store the data
+trainingLabel - Label assigned to training data (1 = face, 0 = non-face)
+numTrainingExamples - Number of training examples
+patchSize - Size of training patches
 *******************************************************************************/
 void MainWindow::DisplayTrainingDataset(QImage *displayImage, double *trainingData, int *trainingLabel, int numTrainingExamples, int patchSize)
 {
@@ -110,54 +111,56 @@ void MainWindow::DisplayTrainingDataset(QImage *displayImage, double *trainingDa
                 }
             }
 
-        cOffset += patchSize;
+            cOffset += patchSize;
 
-        if(cOffset + patchSize >= w)
-        {
-            cOffset = 0;
-            rOffset += patchSize;
+            if(cOffset + patchSize >= w)
+            {
+                cOffset = 0;
+                rOffset += patchSize;
 
-            if(rOffset + patchSize >= h)
-                inBounds = false;
-        }
+                if(rOffset + patchSize >= h)
+                    inBounds = false;
+            }
 
-        ct++;
+            ct++;
     }
 }
 
 /*******************************************************************************
-    SaveClassifier - Save the computed AdaBoost classifier
-        fileName - Name of file
+SaveClassifier - Save the computed AdaBoost classifier
+
+fileName - Name of file
 *******************************************************************************/
 void MainWindow::SaveClassifier(QString fileName)
 {
-   int i, j;
-   FILE *out;
+    int i, j;
+    FILE *out;
 
-   out = fopen(fileName.toAscii(), "w");
+    out = fopen(fileName.toAscii(), "w");
 
-   fprintf(out, "%d\n", m_NumWeakClassifiers);
+    fprintf(out, "%d\n", m_NumWeakClassifiers);
 
-   for(i=0;i<m_NumWeakClassifiers;i++)
-   {
-       fprintf(out, "%d\n", m_WeakClassifiers[i].m_NumBoxes);
+    for(i=0;i<m_NumWeakClassifiers;i++)
+    {
+        fprintf(out, "%d\n", m_WeakClassifiers[i].m_NumBoxes);
 
-       for(j=0;j<m_WeakClassifiers[i].m_NumBoxes;j++)
-           fprintf(out, "%lf\t%lf\t%lf\t%lf\t%lf\n", m_WeakClassifiers[i].m_BoxSign[j], m_WeakClassifiers[i].m_Box[j][0][0], m_WeakClassifiers[i].m_Box[j][0][1],
-                   m_WeakClassifiers[i].m_Box[j][1][0], m_WeakClassifiers[i].m_Box[j][1][1]);
+        for(j=0;j<m_WeakClassifiers[i].m_NumBoxes;j++)
+            fprintf(out, "%lf\t%lf\t%lf\t%lf\t%lf\n", m_WeakClassifiers[i].m_BoxSign[j], m_WeakClassifiers[i].m_Box[j][0][0], m_WeakClassifiers[i].m_Box[j][0][1],
+            m_WeakClassifiers[i].m_Box[j][1][0], m_WeakClassifiers[i].m_Box[j][1][1]);
 
-       fprintf(out, "%lf\n", m_WeakClassifiers[i].m_Area);
-       fprintf(out, "%lf\n", m_WeakClassifiers[i].m_Polarity);
-       fprintf(out, "%lf\n", m_WeakClassifiers[i].m_Threshold);
-       fprintf(out, "%lf\n", m_WeakClassifiers[i].m_Weight);
-   }
+        fprintf(out, "%lf\n", m_WeakClassifiers[i].m_Area);
+        fprintf(out, "%lf\n", m_WeakClassifiers[i].m_Polarity);
+        fprintf(out, "%lf\n", m_WeakClassifiers[i].m_Threshold);
+        fprintf(out, "%lf\n", m_WeakClassifiers[i].m_Weight);
+    }
 
-   fclose(out);
+    fclose(out);
 }
 
 /*******************************************************************************
-    OpenClassifier - Open the computed AdaBoost classifier
-        fileName - Name of file
+OpenClassifier - Open the computed AdaBoost classifier
+
+fileName - Name of file
 *******************************************************************************/
 void MainWindow::OpenClassifier(QString fileName)
 {
@@ -177,7 +180,7 @@ void MainWindow::OpenClassifier(QString fileName)
 
         for(j=0;j<m_WeakClassifiers[i].m_NumBoxes;j++)
             fscanf(in, "%lf\t%lf\t%lf\t%lf\t%lf\n", &(m_WeakClassifiers[i].m_BoxSign[j]), &(m_WeakClassifiers[i].m_Box[j][0][0]), &(m_WeakClassifiers[i].m_Box[j][0][1]),
-                    &(m_WeakClassifiers[i].m_Box[j][1][0]), &(m_WeakClassifiers[i].m_Box[j][1][1]));
+            &(m_WeakClassifiers[i].m_Box[j][1][0]), &(m_WeakClassifiers[i].m_Box[j][1][1]));
 
         fscanf(in, "%lf\n", &(m_WeakClassifiers[i].m_Area));
         fscanf(in, "%lf\n", &(m_WeakClassifiers[i].m_Polarity));
@@ -190,10 +193,11 @@ void MainWindow::OpenClassifier(QString fileName)
 }
 
 /*******************************************************************************
-    DisplayClassifiers - Display the Haar wavelets for the classifier
-        displayImage - Display image
-        weakClassifiers - The weak classifiers used in AdaBoost
-        numWeakClassifiers - Number of weak classifiers
+DisplayClassifiers - Display the Haar wavelets for the classifier
+
+displayImage - Display image
+weakClassifiers - The weak classifiers used in AdaBoost
+numWeakClassifiers - Number of weak classifiers
 *******************************************************************************/
 void MainWindow::DisplayClassifiers(QImage *displayImage, CWeakClassifiers *weakClassifiers, int numWeakClassifiers)
 {
@@ -212,37 +216,38 @@ void MainWindow::DisplayClassifiers(QImage *displayImage, CWeakClassifiers *weak
         for(r=0;r<size;r++)
             for(c=0;c<size;c++)
             {
-                 displayImage->setPixel(c + cOffset, r + rOffset, qRgb(128, 128, 128));
+                displayImage->setPixel(c + cOffset, r + rOffset, qRgb(128, 128, 128));
             }
 
-        for(j=0;j<weakClassifiers[i].m_NumBoxes;j++)
-            for(r=(int) ((double) size*weakClassifiers[i].m_Box[j][0][1]);r<(int) ((double) size*weakClassifiers[i].m_Box[j][1][1]);r++)
-                for(c=(int) ((double) size*weakClassifiers[i].m_Box[j][0][0]);c<(int) ((double) size*weakClassifiers[i].m_Box[j][1][0]);c++)
-                {
-                    if(weakClassifiers[i].m_BoxSign[j] > 0.0)
-                        displayImage->setPixel(c + cOffset, r + rOffset, qRgb(255, 255, 255));
-                    else
-                        displayImage->setPixel(c + cOffset, r + rOffset, qRgb(0, 0, 0));
-                }
+            for(j=0;j<weakClassifiers[i].m_NumBoxes;j++)
+                for(r=(int) ((double) size*weakClassifiers[i].m_Box[j][0][1]);r<(int) ((double) size*weakClassifiers[i].m_Box[j][1][1]);r++)
+                    for(c=(int) ((double) size*weakClassifiers[i].m_Box[j][0][0]);c<(int) ((double) size*weakClassifiers[i].m_Box[j][1][0]);c++)
+                    {
+                        if(weakClassifiers[i].m_BoxSign[j] > 0.0)
+                            displayImage->setPixel(c + cOffset, r + rOffset, qRgb(255, 255, 255));
+                        else
+                            displayImage->setPixel(c + cOffset, r + rOffset, qRgb(0, 0, 0));
+                    }
 
-        cOffset += size+1;
+                    cOffset += size+1;
 
-        if(cOffset + size >= w)
-        {
-            cOffset = 0;
-            rOffset += size + 1;
+                    if(cOffset + size >= w)
+                    {
+                        cOffset = 0;
+                        rOffset += size + 1;
 
-            if(rOffset + size >= h)
-                inBounds = false;
-        }
+                        if(rOffset + size >= h)
+                            inBounds = false;
+                    }
     }
 }
 
 /*******************************************************************************
-    DisplayIntegralImage - Display the integral image
-        displayImage - Display image
-        integralImage - Output integral image
-        w, h - Width and height of image
+DisplayIntegralImage - Display the integral image
+
+displayImage - Display image
+integralImage - Output integral image
+w, h - Width and height of image
 *******************************************************************************/
 void MainWindow::DisplayIntegralImage(QImage *displayImage, double *integralImage, int w, int h)
 {
@@ -259,9 +264,10 @@ void MainWindow::DisplayIntegralImage(QImage *displayImage, double *integralImag
 }
 
 /*******************************************************************************
-    InitializeFeatures - Randomly initialize the candidate weak classifiers
-        weakClassifiers - Candidate weak classifiers
-        numWeakClassifiers - Number of candidate weak classifiers
+InitializeFeatures - Randomly initialize the candidate weak classifiers
+
+weakClassifiers - Candidate weak classifiers
+numWeakClassifiers - Number of candidate weak classifiers
 *******************************************************************************/
 void MainWindow::InitializeFeatures(CWeakClassifiers *weakClassifiers, int numWeakClassifiers)
 {
@@ -361,10 +367,11 @@ void MainWindow::InitializeFeatures(CWeakClassifiers *weakClassifiers, int numWe
 }
 
 /*******************************************************************************
-    ConvertColorToDouble - Simple helper function to convert from RGB to double
-        image - Input image
-        dImage - Output double image
-        w, h - Image width and height
+ConvertColorToDouble - Simple helper function to convert from RGB to double
+
+image - Input image
+dImage - Output double image
+w, h - Image width and height
 *******************************************************************************/
 void MainWindow::ConvertColorToDouble(QImage image, double *dImage, int w, int h)
 {
@@ -380,16 +387,17 @@ void MainWindow::ConvertColorToDouble(QImage image, double *dImage, int w, int h
 }
 
 /*******************************************************************************
-    ComputeTrainingSetFeatures - Compute all of the features for the training dataset
-        trainingData - Array used to store the data
-        features - Array holding feature values
-        numTrainingExamples - Number of training examples
-        patchSize - Size of training patches
-        weakClassifiers - Candidate weak classifiers
-        numWeakClassifiers - Number of candidate weak classifiers
+ComputeTrainingSetFeatures - Compute all of the features for the training dataset
+
+trainingData - Array used to store the data
+features - Array holding feature values
+numTrainingExamples - Number of training examples
+patchSize - Size of training patches
+weakClassifiers - Candidate weak classifiers
+numWeakClassifiers - Number of candidate weak classifiers
 *******************************************************************************/
 void MainWindow::ComputeTrainingSetFeatures(double *trainingData, double *features,
-                                int numTrainingExamples, int patchSize, CWeakClassifiers *weakClassifiers, int numWeakClassifiers)
+    int numTrainingExamples, int patchSize, CWeakClassifiers *weakClassifiers, int numWeakClassifiers)
 {
     int i;
     double *integralImage = new double [patchSize*patchSize];
@@ -413,12 +421,13 @@ void MainWindow::ComputeTrainingSetFeatures(double *trainingData, double *featur
 }
 
 /*******************************************************************************
-    DisplayFeatures - Display the computed features (green = faces, red = background)
-        displayImage - Display image
-        features - Array holding feature values
-        trainingLabel - Label assigned to training data (1 = face, 0 = non-face)
-        numFeatures - Number of features
-        numTrainingExamples - Number of training examples
+DisplayFeatures - Display the computed features (green = faces, red = background)
+
+displayImage - Display image
+features - Array holding feature values
+trainingLabel - Label assigned to training data (1 = face, 0 = non-face)
+numFeatures - Number of features
+numTrainingExamples - Number of training examples
 *******************************************************************************/
 void MainWindow::DisplayFeatures(QImage *displayImage, double *features, int *trainingLabel, int numFeatures, int numTrainingExamples)
 {
@@ -448,45 +457,46 @@ void MainWindow::DisplayFeatures(QImage *displayImage, double *features, int *tr
         {
             for(c=0;c<numFeatures;c++)
                 if(c < w)
-            {
-                int val = 255.0*(features[r*numFeatures + c]/(4.0*mean)) + 128.0;
-                val = min(255, max(0, val));
+                {
+                    int val = 255.0*(features[r*numFeatures + c]/(4.0*mean)) + 128.0;
+                    val = min(255, max(0, val));
 
-                displayImage->setPixel(c, posCt, qRgb(0, val, 0));
-            }
+                    displayImage->setPixel(c, posCt, qRgb(0, val, 0));
+                }
 
-            posCt++;
+                posCt++;
         }
 
         if(trainingLabel[r] == 0 && negCt < h/2)
         {
             for(c=0;c<numFeatures;c++)
                 if(c < w)
-            {
-                int val = 255.0*(features[r*numFeatures + c]/(4.0*mean)) + 128.0;
-                val = min(255, max(0, val));
+                {
+                    int val = 255.0*(features[r*numFeatures + c]/(4.0*mean)) + 128.0;
+                    val = min(255, max(0, val));
 
-                displayImage->setPixel(c, negCt + h/2, qRgb(val, 0, 0));
-            }
+                    displayImage->setPixel(c, negCt + h/2, qRgb(val, 0, 0));
+                }
 
-            negCt++;
+                negCt++;
         }
     }
 
 }
 
 /*******************************************************************************
-    AdaBoost - Computes and AdaBoost classifier using a set of candidate weak classifiers
-        features - Array of feature values pre-computed for the training dataset
-        trainingLabel - Ground truth labels for the training examples (1 = face, 0 = background)
-        numTrainingExamples - Number of training examples
-        candidateWeakClassifiers - Set of candidate weak classifiers
-        numCandidateWeakClassifiers - Number of candidate weak classifiers
-        weakClassifiers - Set of weak classifiers selected by AdaBoost
-        numWeakClassifiers - Number of selected weak classifiers
+AdaBoost - Computes and AdaBoost classifier using a set of candidate weak classifiers
+
+features - Array of feature values pre-computed for the training dataset
+trainingLabel - Ground truth labels for the training examples (1 = face, 0 = background)
+numTrainingExamples - Number of training examples
+candidateWeakClassifiers - Set of candidate weak classifiers
+numCandidateWeakClassifiers - Number of candidate weak classifiers
+weakClassifiers - Set of weak classifiers selected by AdaBoost
+numWeakClassifiers - Number of selected weak classifiers
 *******************************************************************************/
 void MainWindow::AdaBoost(double *features, int *trainingLabel, int numTrainingExamples,
-              CWeakClassifiers *candidateWeakClassifiers, int numCandidateWeakClassifiers, CWeakClassifiers *weakClassifiers, int numWeakClassifiers)
+    CWeakClassifiers *candidateWeakClassifiers, int numCandidateWeakClassifiers, CWeakClassifiers *weakClassifiers, int numWeakClassifiers)
 {
     FILE *out;
     out = fopen("AdaBoost.txt", "w");
@@ -550,9 +560,9 @@ void MainWindow::AdaBoost(double *features, int *trainingLabel, int numTrainingE
 
             // Find the best threshold, polarity and weight for the candidate weak classifier
             double error = FindBestClassifier(&(featureSortIdx[j*numTrainingExamples]),
-                                              &(featureTranspose[j*numTrainingExamples]),
-                                              trainingLabel, dataWeights, numTrainingExamples,
-                                              candidateWeakClassifiers[j], &bestClassifier);
+                &(featureTranspose[j*numTrainingExamples]),
+                trainingLabel, dataWeights, numTrainingExamples,
+                candidateWeakClassifiers[j], &bestClassifier);
 
             // Is this the best classifier found so far?
             if(error < bestError)
@@ -583,13 +593,13 @@ void MainWindow::AdaBoost(double *features, int *trainingLabel, int numTrainingE
             }
 
             if((scores[j] > 0.5*weightSum && trainingLabel[j] == 0) ||
-                    (scores[j] < 0.5*weightSum && trainingLabel[j] == 1))
+                (scores[j] < 0.5*weightSum && trainingLabel[j] == 1))
                 error++;
         }
 
         // Output information that you might find useful for debugging
         fprintf(out, "Count: %d\tIdx: %d\tWeight: %lf\tError: %lf\n", i, bestIdx,
-                weakClassifiers[i].m_Weight, error/(double) numTrainingExamples);
+            weakClassifiers[i].m_Weight, error/(double) numTrainingExamples);
         fflush(out);
     }
 
@@ -602,16 +612,17 @@ void MainWindow::AdaBoost(double *features, int *trainingLabel, int numTrainingE
 }
 
 /*******************************************************************************
-    FindFaces - Find faces in an image
-        weakClassifiers - Set of weak classifiers
-        numWeakClassifiers - Number of weak classifiers
-        threshold - Classifier must be above Threshold to return detected face.
-        minScale, maxScale - Minimum and maximum scale to search for faces.
-        faceDetections - Set of face detections
-        displayImage - Display image showing detected faces.
+FindFaces - Find faces in an image
+
+weakClassifiers - Set of weak classifiers
+numWeakClassifiers - Number of weak classifiers
+threshold - Classifier must be above Threshold to return detected face.
+minScale, maxScale - Minimum and maximum scale to search for faces.
+faceDetections - Set of face detections
+displayImage - Display image showing detected faces.
 *******************************************************************************/
 void MainWindow::FindFaces(QImage inImage, CWeakClassifiers *weakClassifiers, int numWeakClassifiers, double threshold, double minScale, double maxScale,
-                           QMap<double, CDetection> *faceDetections, QImage *displayImage)
+    QMap<double, CDetection> *faceDetections, QImage *displayImage)
 {
     int w = inImage.width();
     int h = inImage.height();
@@ -663,9 +674,10 @@ void MainWindow::FindFaces(QImage inImage, CWeakClassifiers *weakClassifiers, in
 }
 
 /*******************************************************************************
-    DrawFace - Draw the detected faces.
-        displayImage - Display image
-        faceDetections - Set of face detections
+DrawFace - Draw the detected faces.
+
+displayImage - Display image
+faceDetections - Set of face detections
 *******************************************************************************/
 void MainWindow::DrawFace(QImage *displayImage, QMap<double, CDetection> *faceDetections)
 {
@@ -696,24 +708,18 @@ void MainWindow::DrawFace(QImage *displayImage, QMap<double, CDetection> *faceDe
 
 }
 
-
 /*******************************************************************************
-*******************************************************************************
-*******************************************************************************
-
-    The routines you need to implement are below
-
-*******************************************************************************
-*******************************************************************************
+METHODS
 *******************************************************************************/
 
 /*******************************************************************************
-    DisplayAverageFace - Display the average face and non-face image
-        displayImage - Display image, draw the average images on this image
-        trainingData - Array used to store the data
-        trainingLabel - Label assigned to training data (1 = face, 0 = non-face)
-        numTrainingExamples - Number of training examples
-        patchSize - Size of training patches in one dimension (patches have patchSize*patchSize pixels)
+DisplayAverageFace - Display the average face and non-face image
+
+displayImage - Display image, draw the average images on this image
+trainingData - Array used to store the data
+trainingLabel - Label assigned to training data (1 = face, 0 = non-face)
+numTrainingExamples - Number of training examples
+patchSize - Size of training patches in one dimension (patches have patchSize*patchSize pixels)
 *******************************************************************************/
 void MainWindow::DisplayAverageFace(QImage *displayImage, double *trainingData, int *trainingLabel, int numTrainingExamples, int patchSize)
 {
@@ -721,10 +727,11 @@ void MainWindow::DisplayAverageFace(QImage *displayImage, double *trainingData, 
 }
 
 /*******************************************************************************
-    IntegralImage - Compute the integral image
-        image - Input double image
-        integralImage - Output integral image
-        w, h - Width and height of image
+IntegralImage - Compute the integral image
+
+image - Input double image
+integralImage - Output integral image
+w, h - Width and height of image
 *******************************************************************************/
 void MainWindow::IntegralImage(double *image, double *integralImage, int w, int h)
 {
@@ -732,10 +739,11 @@ void MainWindow::IntegralImage(double *image, double *integralImage, int w, int 
 }
 
 /*******************************************************************************
-    SumBox - Helper function for SumBox - standard bilinear interpolation
-        image - image
-        x, y - Position to interpolate
-        w - Width of image (integralImage)
+SumBox - Helper function for SumBox - standard bilinear interpolation
+
+image - image
+x, y - Position to interpolate
+w - Width of image (integralImage)
 *******************************************************************************/
 double MainWindow::BilinearInterpolation(double *image, double x, double y, int w)
 {
@@ -745,11 +753,12 @@ double MainWindow::BilinearInterpolation(double *image, double x, double y, int 
 }
 
 /*******************************************************************************
-    SumBox - Helper function for ComputeFeatures - compute the sum of the pixels within a box.
-        integralImage - integral image
-        x0, y0 - Upper lefthand corner of box
-        x1, y1 - Lower righthand corner of box
-        w - Width of image (integralImage)
+SumBox - Helper function for ComputeFeatures - compute the sum of the pixels within a box.
+
+integralImage - integral image
+x0, y0 - Upper lefthand corner of box
+x1, y1 - Lower righthand corner of box
+w - Width of image (integralImage)
 *******************************************************************************/
 double MainWindow::SumBox(double *integralImage, double x0, double y0, double x1, double y1, int w)
 {
@@ -759,14 +768,15 @@ double MainWindow::SumBox(double *integralImage, double x0, double y0, double x1
 }
 
 /*******************************************************************************
-    ComputeFeatures - Compute all of the features for a specific bounding box
-        integralImage - integral image
-        c0, r0 - position of upper lefthand corner of bounding box
-        size - Size of bounding box
-        features - Array for storing computed feature values, access using features[i] for all i less than numWeakClassifiers.
-        weakClassifiers - Weak classifiers
-        numWeakClassifiers - Number of weak classifiers
-        w - Width of image (integralImage)
+ComputeFeatures - Compute all of the features for a specific bounding box
+
+integralImage - integral image
+c0, r0 - position of upper lefthand corner of bounding box
+size - Size of bounding box
+features - Array for storing computed feature values, access using features[i] for all i less than numWeakClassifiers.
+weakClassifiers - Weak classifiers
+numWeakClassifiers - Number of weak classifiers
+w - Width of image (integralImage)
 *******************************************************************************/
 void MainWindow::ComputeFeatures(double *integralImage, int c0, int r0, int size, double *features, CWeakClassifiers *weakClassifiers, int numWeakClassifiers, int w)
 {
@@ -788,18 +798,19 @@ void MainWindow::ComputeFeatures(double *integralImage, int c0, int r0, int size
 }
 
 /*******************************************************************************
-    FindBestClassifier - AdaBoost helper function.  Find the best threshold for the candidate classifier
-        featureSortIdx - Indexes of the training examples sorted based on the feature responses (lowest to highest)
-                Use these indices to index into the other arrays, i.e. features, trainingLabel, dataWeights.
-        features - Array of feature values for the candidate classifier
-        trainingLabel - Ground truth labels for the training examples (1 = face, 0 = background)
-        dataWeights - Weights used to weight each training example
-        numTrainingExamples - Number of training examples
-        candidateWeakClassifier - Candidate classifier
-        bestClassifier - Returned best classifier (updated threshold, weight and polarity)
+FindBestClassifier - AdaBoost helper function.  Find the best threshold for the candidate classifier
+
+featureSortIdx - Indexes of the training examples sorted based on the feature responses (lowest to highest)
+Use these indices to index into the other arrays, i.e. features, trainingLabel, dataWeights.
+features - Array of feature values for the candidate classifier
+trainingLabel - Ground truth labels for the training examples (1 = face, 0 = background)
+dataWeights - Weights used to weight each training example
+numTrainingExamples - Number of training examples
+candidateWeakClassifier - Candidate classifier
+bestClassifier - Returned best classifier (updated threshold, weight and polarity)
 *******************************************************************************/
 double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int *trainingLabel, double *dataWeights,
-                                      int numTrainingExamples, CWeakClassifiers candidateWeakClassifier, CWeakClassifiers *bestClassifier)
+    int numTrainingExamples, CWeakClassifiers candidateWeakClassifier, CWeakClassifiers *bestClassifier)
 {
     double bestError = 99999999.0;
 
@@ -819,12 +830,13 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
 }
 
 /*******************************************************************************
-    UpdateDataWeights - AdaBoost helper function.  Updates the weighting of the training examples
-        features - Array of feature values for the candidate classifier
-        trainingLabel - Ground truth labels for the training examples (1 = face, 0 = background)
-        weakClassifier - A weak classifier
-        dataWeights - Weights used to weight each training example.  These are teh weights updated.
-        numTrainingExamples - Number of training examples
+UpdateDataWeights - AdaBoost helper function.  Updates the weighting of the training examples
+
+features - Array of feature values for the candidate classifier
+trainingLabel - Ground truth labels for the training examples (1 = face, 0 = background)
+weakClassifier - A weak classifier
+dataWeights - Weights used to weight each training example.  These are teh weights updated.
+numTrainingExamples - Number of training examples
 *******************************************************************************/
 void MainWindow::UpdateDataWeights(double *features, int *trainingLabel, CWeakClassifiers weakClassifier, double *dataWeights, int numTrainingExamples)
 {
@@ -832,13 +844,14 @@ void MainWindow::UpdateDataWeights(double *features, int *trainingLabel, CWeakCl
 }
 
 /*******************************************************************************
-    ClassifyBox - FindFaces helper function.  Return classification score for bounding box
-        integralImage - integral image
-        c0, r0 - position of upper lefthand corner of bounding box
-        size - Size of bounding box
-        weakClassifiers - Weak classifiers
-        numWeakClassifiers - Number of weak classifiers
-        w - Width of image (integralImage)
+ClassifyBox - FindFaces helper function.  Return classification score for bounding box
+
+integralImage - integral image
+c0, r0 - position of upper lefthand corner of bounding box
+size - Size of bounding box
+weakClassifiers - Weak classifiers
+numWeakClassifiers - Number of weak classifiers
+w - Width of image (integralImage)
 *******************************************************************************/
 double MainWindow::ClassifyBox(double *integralImage, int c0, int r0, int size, CWeakClassifiers *weakClassifiers, int numWeakClassifiers, int w)
 {
@@ -848,12 +861,14 @@ double MainWindow::ClassifyBox(double *integralImage, int c0, int r0, int size, 
 }
 
 /*******************************************************************************
-    NMS - Non-maximal suppression of face detections (neighboring face detections must be beyond
-                xyThreshold AND scaleThreshold in position and scale respectivitely.)
-        faceDetections - Set of face detections
-        xyThreshold - Minimum distance in position between neighboring detections
-        scaleThreshold - Minimum distance in scale between neighboring detections
-        displayImage - Display image
+NMS - Non-maximal suppression of face detections. 
+Neighboring face detections must be beyond xyThreshold AND scaleThreshold in 
+position and scale respectivitely.
+
+faceDetections - Set of face detections
+xyThreshold - Minimum distance in position between neighboring detections
+scaleThreshold - Minimum distance in scale between neighboring detections
+displayImage - Display image
 *******************************************************************************/
 void MainWindow::NMS(QMap<double, CDetection> *faceDetections, double xyThreshold, double scaleThreshold, QImage *displayImage)
 {
