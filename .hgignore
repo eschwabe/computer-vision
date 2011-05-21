@@ -20,3 +20,9 @@ hw3/src/vc100.pdb
 hw3/src/ui_mainwindow.h
 hw3/src/ipch
 hw3/src/release
+hw4/src/debug
+hw4/src/vc100.pdb
+hw4/src/FaceDetectorStudent.sdf
+hw4/src/ui_mainwindow.h
+hw4/src/release
+hw4/src/ipch
