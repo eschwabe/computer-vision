@@ -721,9 +721,74 @@ trainingLabel - Label assigned to training data (1 = face, 0 = non-face)
 numTrainingExamples - Number of training examples
 patchSize - Size of training patches in one dimension (patches have patchSize*patchSize pixels)
 *******************************************************************************/
-void MainWindow::DisplayAverageFace(QImage *displayImage, double *trainingData, int *trainingLabel, int numTrainingExamples, int patchSize)
+void MainWindow::DisplayAverageFace(QImage *displayImage, double *trainingData, int *trainingLabel, 
+    int numTrainingExamples, int patchSize)
 {
-    // Add your code here.
+    double *averageFace = new double[patchSize*patchSize];
+    double *averageNon = new double[patchSize*patchSize];
+    int faces = 0;
+    int nonfaces = 0;
+
+    // initialize average data
+    for(int i=0; i<patchSize*patchSize; i++)
+    {
+        averageFace[i] = 0.0;
+        averageNon[i] = 0.0;
+    }
+
+    // for each training image
+    for(int idx=0; idx<numTrainingExamples; idx++)
+    {
+        double* averageData = NULL;
+
+        // check training data type
+        if(trainingLabel[idx] == 1)
+        {
+            // face
+            averageData = averageFace;
+            faces++;
+        } 
+        else 
+        {
+            // non-face
+            averageData = averageNon;
+            nonfaces++;
+        }
+
+        // for each row/col in the image
+        for(int r=0;r<patchSize;r++)
+        {
+            for(int c=0;c<patchSize;c++)
+            {
+                // add each pixel to average data
+                double data = trainingData[idx*patchSize*patchSize + r*patchSize + c];
+                averageData[r*patchSize + c] += data;
+            }
+        }
+    }
+
+    // compute final averages
+    for(int i=0; i<patchSize*patchSize; i++)
+    {
+        averageFace[i] /= faces;
+        averageNon[i] /= nonfaces;
+    }
+
+    // clear image
+    displayImage->fill(qRgb(128, 128, 128));
+
+    // store averages in display image
+    for(int r=0;r<patchSize;r++)
+    {
+        for(int c=0;c<patchSize;c++)
+        {
+            int pFace = (int)averageFace[r*patchSize + c];
+            int pNonFace = (int)averageNon[r*patchSize + c];
+
+            displayImage->setPixel(c, r, qRgb(pFace,pFace,pFace));
+            displayImage->setPixel(c+patchSize, r, qRgb(pNonFace,pNonFace,pNonFace));
+        }
+    }
 }
 
 /*******************************************************************************
@@ -735,7 +800,28 @@ w, h - Width and height of image
 *******************************************************************************/
 void MainWindow::IntegralImage(double *image, double *integralImage, int w, int h)
 {
-    // Add your code here.
+    // sums of rectangular regions
+
+    // for each pixel
+    for(int r=0;r<h;r++)
+    {
+        for(int c=0;c<w;c++)
+        {
+            // find each pixel in nearby grid
+            // if out of range, pixel contributes 0
+            double pXY = image[r*w + c];
+            double pX1Y = 0.0;
+            double pXY1 = 0.0;
+            double pX1Y1 = 0.0;
+
+            if(c>0) pX1Y = integralImage[r*w + (c-1)];
+            if(r>0) pXY1 = integralImage[(r-1)*w + (c)];
+            if(r>0 && c>0) pX1Y1 = integralImage[(r-1)*w + (c-1)];
+
+            // compute sum for current pixel
+            integralImage[r*w+c] = pXY + pX1Y + pXY1 - pX1Y1;
+        }
+    }
 }
 
 /*******************************************************************************
