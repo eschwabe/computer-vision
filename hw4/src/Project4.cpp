@@ -440,6 +440,8 @@ void MainWindow::DisplayFeatures(QImage *displayImage, double *features, int *tr
     double mean = 0.0;
     double meanCt = 0.0;
 
+    displayImage->fill(qRgb(230,230,230));
+
     for(r=0;r<numTrainingExamples;r+=10)
     {
         for(c=0;c<numFeatures;c++)
@@ -775,7 +777,7 @@ void MainWindow::DisplayAverageFace(QImage *displayImage, double *trainingData, 
     }
 
     // clear image
-    displayImage->fill(qRgb(128, 128, 128));
+    displayImage->fill(qRgb(230, 230, 230));
 
     // store averages in display image
     for(int r=0;r<patchSize;r++)
@@ -825,7 +827,7 @@ void MainWindow::IntegralImage(double *image, double *integralImage, int w, int 
 }
 
 /*******************************************************************************
-SumBox - Helper function for SumBox - standard bilinear interpolation
+Standard bilinear interpolation (helper function for SumBox)
 
 image - image
 x, y - Position to interpolate
@@ -833,9 +835,31 @@ w - Width of image (integralImage)
 *******************************************************************************/
 double MainWindow::BilinearInterpolation(double *image, double x, double y, int w)
 {
-    // Add your code here (or cut and paste from a previous assignment.)
+    double value = 0.0;
 
-    return 0.0;
+    // compute base pixel
+    int baseX = (int)x;
+    int baseY = (int)y;
+
+    // check if pixels in range
+    if( x >= 0 && (x+1) < w && y >= 0 )
+    {
+        // compute weight values
+        double a = x-baseX;
+        double b = y-baseY;
+
+        // find pixels
+        double pixelXY = image[(baseY)*w+(baseX)];
+        double pixelX1Y = image[(baseY)*w+(baseX+1)];
+        double pixelXY1 = image[(baseY+1)*w+(baseX)];
+        double pixelX1Y1 = image[(baseY+1)*w+(baseX+1)];
+
+        // compute interpolated pixel
+        // f (x + a, y + b) = (1 - a)(1 - b) f (x, y) + a(1 - b) f (x + 1, y) + (1 - a)b f (x,y + 1) + ab f (x + 1, y + 1)
+        value = ((1-a)*(1-b)*pixelXY) + (a*(1-b)*pixelX1Y) + ((1-a)*b*pixelXY1) + (a*b*pixelX1Y1);
+    }
+
+    return value;
 }
 
 /*******************************************************************************
@@ -848,9 +872,25 @@ w - Width of image (integralImage)
 *******************************************************************************/
 double MainWindow::SumBox(double *integralImage, double x0, double y0, double x1, double y1, int w)
 {
-    // Add your code here, use BilinearInterpolation as a helper function.
+    double sum = 0.0;
 
-    return 0.0;
+    // x0,y0
+    //      A ----- B
+    //      |       |
+    //      |       |
+    //      C ----- D
+    //              x1,y1
+
+    // compute A (bottom left), B (bottom right), C (top left), D (top right) sum pixels
+    double A = BilinearInterpolation(integralImage, x0-1,   y0-1,   w);
+    double B = BilinearInterpolation(integralImage, x1,     y0-1,   w);
+    double C = BilinearInterpolation(integralImage, x0-1,   y1,     w);
+    double D = BilinearInterpolation(integralImage, x1,     y1,     w);
+
+    // compute D+A-B-C
+    sum = D + A - B - C;
+
+    return sum;
 }
 
 /*******************************************************************************
@@ -864,22 +904,32 @@ weakClassifiers - Weak classifiers
 numWeakClassifiers - Number of weak classifiers
 w - Width of image (integralImage)
 *******************************************************************************/
-void MainWindow::ComputeFeatures(double *integralImage, int c0, int r0, int size, double *features, CWeakClassifiers *weakClassifiers, int numWeakClassifiers, int w)
+void MainWindow::ComputeFeatures(double *integralImage, int c0, int r0, int size, double *features, 
+    CWeakClassifiers *weakClassifiers, int numWeakClassifiers, int w)
 {
     int i, j;
 
+    // compute each classifier
     for(i=0;i<numWeakClassifiers;i++)
     {
         features[i] = 0.0;
 
+        // sum pixels within each box
         for(j=0;j<weakClassifiers[i].m_NumBoxes;j++)
         {
-            // Add your code to compute the sum of the pixels within each box weakClassifiers[i].m_Box[j]
-            double sum = 0.0;
+            // compute box coordinates
+            double x0 = weakClassifiers[i].m_Box[j][0][0]*size + c0;
+            double y0 = weakClassifiers[i].m_Box[j][0][1]*size + r0;
 
-            // Store the final feature value
-            features[i] += weakClassifiers[i].m_BoxSign[j]*sum/((double) (size*size));
-        }
+            double x1 = weakClassifiers[i].m_Box[j][1][0]*size + c0;
+            double y1 = weakClassifiers[i].m_Box[j][1][1]*size + r0;
+
+            // compute sum of pixels in box
+            double sum = SumBox(integralImage, x0, y0, x1, y1, w); 
+
+            // store the final feature value
+            features[i] += weakClassifiers[i].m_BoxSign[j]*sum / ((double)(size*size));
+        } 
     }
 }
 
