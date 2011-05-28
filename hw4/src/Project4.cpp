@@ -953,16 +953,74 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
     // Copy the weak classifiers params
     candidateWeakClassifier.copy(bestClassifier);
 
+    // train a classifier using a single feature
+    double sPos = 0.0;
+    double sNeg = 0.0;
+    double tPos = 0.0;
+    double tNeg = 0.0;
 
-    // Add your code here.
+    // compute totals
+    for(int i = 0; i < numTrainingExamples; i++)
+    {
+        // face (positive result)
+        if(trainingLabel[i] == 1) { 
+            tPos += dataWeights[i]; 
+        }
+        
+        // background (negative result)
+        else { 
+            tNeg += dataWeights[i]; 
+        }
+    }
 
-    // Once you find the best weak classifier, you'll need to update the following member variables:
-    //      bestClassifier->m_Polarity
-    //      bestClassifier->m_Threshold
-    //      bestClassifier->m_Weight - this is the alpha value in the course notes
+    // run through each training example
+    for(int i = 0; i < numTrainingExamples; i++)
+    {
+        // find sorted feature index
+        int idx = featureSortIdx[i];
+
+        // update sums
+
+        // face (positive result)
+        if(trainingLabel[idx] == 1) { 
+            sPos += dataWeights[idx]; 
+        }
+            
+        // background (negative result)
+        else { 
+            sNeg += dataWeights[idx]; 
+        }
+
+        // compute positive and negative error
+        double errorPos = sPos + (tNeg - sNeg);
+        double errorNeg = sNeg + (tPos - sPos);
+
+        double error = std::min( errorNeg, errorPos );
+
+        // check if error decreased
+        if(error < bestError)
+        {
+            // update best classifier error
+            bestError = error;
+            
+            // determine polarity
+            if(errorPos < errorNeg) {
+                bestClassifier->m_Polarity = 1;
+            }
+            else {
+                bestClassifier->m_Polarity = 0;
+            }
+
+            // set threshold
+            bestClassifier->m_Threshold = features[idx];
+
+            // compute error weight
+            double beta = bestError/(1-bestError);
+            bestClassifier->m_Weight = std::log(1/beta);
+        }
+    }
 
     return bestError;
-
 }
 
 /*******************************************************************************
@@ -976,7 +1034,33 @@ numTrainingExamples - Number of training examples
 *******************************************************************************/
 void MainWindow::UpdateDataWeights(double *features, int *trainingLabel, CWeakClassifiers weakClassifier, double *dataWeights, int numTrainingExamples)
 {
-    // Add you code here.
+    double total = 0.0;
+
+    // compute beta from alpha weight
+    double beta = 1 / std::exp(weakClassifier.m_Weight);
+
+    for(int i = 0; i < numTrainingExamples; i++)
+    {
+        // feature lower than threshold and a face
+        if(features[i] < weakClassifier.m_Threshold && trainingLabel[i] == 1)
+        {
+            // classified correctly   
+            dataWeights[i] = dataWeights[i]*std::pow(beta, 1);
+        }
+        else
+        {
+            // not classified correctly
+            dataWeights[i] = dataWeights[i]*std::pow(beta, 0);
+        }
+
+        total += dataWeights[i];
+    }
+
+    // normalize all weights
+    for(int i = 0; i < numTrainingExamples; i++)
+    {
+        dataWeights[i] /= total;
+    }
 }
 
 /*******************************************************************************
