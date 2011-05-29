@@ -992,10 +992,10 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
         }
 
         // compute positive and negative error
-        double errorPos = sPos + (tNeg - sNeg);
-        double errorNeg = sNeg + (tPos - sPos);
+        double errorFaceAboveThres = sPos + (tNeg - sNeg);
+        double errorFaceBelowThres = sNeg + (tPos - sPos);
 
-        double error = std::min( errorNeg, errorPos );
+        double error = std::min( errorFaceBelowThres, errorFaceAboveThres );
 
         // check if error decreased
         if(error < bestError)
@@ -1004,10 +1004,12 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
             bestError = error;
             
             // determine polarity
-            if(errorPos < errorNeg) {
+            if(errorFaceAboveThres < errorFaceBelowThres) {
+                // face above threshold
                 bestClassifier->m_Polarity = 1;
             }
             else {
+                // face below threshold
                 bestClassifier->m_Polarity = 0;
             }
 
@@ -1038,25 +1040,45 @@ void MainWindow::UpdateDataWeights(double *features, int *trainingLabel, CWeakCl
 
     // compute beta from alpha weight
     double beta = 1 / std::exp(weakClassifier.m_Weight);
+    int ec = 0;
 
     for(int i = 0; i < numTrainingExamples; i++)
     {
-        // feature lower than threshold and a face
-        if(features[i] < weakClassifier.m_Threshold && trainingLabel[i] == 1)
+        // initialize as not classified correctly
+        ec = 1;
+
+        // faces above threshold
+        if( weakClassifier.m_Polarity == 1 )
         {
-            // classified correctly   
-            dataWeights[i] = dataWeights[i]*std::pow(beta, 1);
-        }
-        else
-        {
-            // not classified correctly
-            dataWeights[i] = dataWeights[i]*std::pow(beta, 0);
+            // feature lower than threshold and not a face
+            if(features[i] <= weakClassifier.m_Threshold && trainingLabel[i] == 0) {
+                ec = 0;
+            }
+            else if(features[i] > weakClassifier.m_Threshold && trainingLabel[i] == 1) {
+                // feature higher than threshold and a face
+                ec = 0;
+            }
         }
 
+        // faces below threshold
+        if( weakClassifier.m_Polarity == 0 )
+        {
+            // feature lower than threshold and a face
+            if(features[i] <= weakClassifier.m_Threshold && trainingLabel[i] == 1) {
+                ec = 0;
+            }
+            // feature higher than threshold and not a face
+            else if(features[i] > weakClassifier.m_Threshold && trainingLabel[i] == 0) {
+                ec = 0;
+            }
+        }
+
+        // compute new weight
+        dataWeights[i] = dataWeights[i]*std::pow(beta, 1-ec);
         total += dataWeights[i];
     }
 
-    // normalize all weights
+    // normalize weights
     for(int i = 0; i < numTrainingExamples; i++)
     {
         dataWeights[i] /= total;
