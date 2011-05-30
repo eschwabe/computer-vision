@@ -1017,8 +1017,8 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
             bestClassifier->m_Threshold = features[idx];
 
             // compute error weight
-            double beta = bestError/(1-bestError);
-            bestClassifier->m_Weight = std::log(1/beta);
+            double beta = bestError/(1.0-bestError);
+            bestClassifier->m_Weight = std::log(1.0/beta);
         }
     }
 
@@ -1097,9 +1097,27 @@ w - Width of image (integralImage)
 *******************************************************************************/
 double MainWindow::ClassifyBox(double *integralImage, int c0, int r0, int size, CWeakClassifiers *weakClassifiers, int numWeakClassifiers, int w)
 {
-    // Add your code here.
+    // compute features for the classifier list
+    double* features = new double[numWeakClassifiers];
+    ComputeFeatures(integralImage, c0, r0, size, features, weakClassifiers, numWeakClassifiers, w);
 
-    return 0.0;
+    // compute score sums
+    double weightedFeatureScore = 0.0;
+    double weightScore = 0.0;
+
+    for(int i = 0; i < numWeakClassifiers; i++)
+    {
+        weightedFeatureScore += weakClassifiers[i].m_Weight*features[i];
+        weightScore += weakClassifiers[i].m_Weight;
+    }
+
+    // compute classification score
+    // sum_t alpha_t*h_t(x) - 0.5*sum_t alpha_t
+    double score = std::abs(weightedFeatureScore - (0.5*weightScore));
+
+    delete [] features;
+
+    return score;
 }
 
 /*******************************************************************************
@@ -1113,22 +1131,47 @@ scaleThreshold - Minimum distance in scale between neighboring detections
 displayImage - Display image
 *******************************************************************************/
 void MainWindow::NMS(QMap<double, CDetection> *faceDetections, double xyThreshold, double scaleThreshold, QImage *displayImage)
-{
-    QMap<double, CDetection>::const_iterator iterator = faceDetections->constBegin();
-    // Store the final set of face detections in finalFaceDetections
+{  
+    // store the final set of face detections
     QMap<double, CDetection> finalFaceDetections;
 
-    // This is how you iterate through all the faces detections (lowest face detection score first.)
-    while(iterator != faceDetections->constEnd())
+    // iterate through all the faces detections (lowest face detection score first)
+    QMap<double, CDetection>::const_iterator iterCurrent = faceDetections->constBegin();
+    while(iterCurrent != faceDetections->constEnd())
     {
-        // Add your code here.
+        // scan through higher scoring detections
+        QMap<double, CDetection>::const_iterator iterScan = iterCurrent;
+        iterScan++;
 
-        // Add a face detection to finalFaceDetections using:
-        // finalFaceDetections.insertMulti(iterator.key(), iterator.value());
+        while(iterScan != faceDetections->constEnd())
+        {
+            // compute distance
+            double distance = std::sqrt( 
+                std::pow((iterCurrent->m_X - iterScan->m_X), 2.0) + 
+                std::pow((iterCurrent->m_Y - iterScan->m_Y), 2.0) );
 
-        iterator++;
+            // compute scale
+            double scale = std::abs( iterCurrent->m_Scale - iterScan->m_Scale );
+            
+            // if detection found within position and scale thresholds, stop scan
+            if( distance < xyThreshold && scale < scaleThreshold ) {
+                break;
+            }
+
+            // increment scan
+            iterScan++;
+        }
+     
+        // if scan did not find a neighboring detection
+        if(iterScan == faceDetections->constEnd()) {
+            // add current face detection to finalFaceDetections
+            finalFaceDetections.insertMulti(iterCurrent.key(), iterCurrent.value());
+        }
+
+        // increment current detection
+        iterCurrent++;
     }
 
+    // draw detections
     DrawFace(displayImage, &finalFaceDetections);
-
 }
