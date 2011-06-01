@@ -882,10 +882,10 @@ double MainWindow::SumBox(double *integralImage, double x0, double y0, double x1
     //              x1,y1
 
     // compute A (bottom left), B (bottom right), C (top left), D (top right) sum pixels
-    double A = BilinearInterpolation(integralImage, x0-1,   y0-1,   w);
-    double B = BilinearInterpolation(integralImage, x1,     y0-1,   w);
-    double C = BilinearInterpolation(integralImage, x0-1,   y1,     w);
-    double D = BilinearInterpolation(integralImage, x1,     y1,     w);
+    double A = BilinearInterpolation(integralImage, x0,   y0,   w);
+    double B = BilinearInterpolation(integralImage, x1,   y0,   w);
+    double C = BilinearInterpolation(integralImage, x0,   y1,   w);
+    double D = BilinearInterpolation(integralImage, x1,   y1,   w);
 
     // compute D+A-B-C
     sum = D + A - B - C;
@@ -979,18 +979,6 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
         // find sorted feature index
         int idx = featureSortIdx[i];
 
-        // update sums
-
-        // face (positive result)
-        if(trainingLabel[idx] == 1) { 
-            sPos += dataWeights[idx]; 
-        }
-            
-        // background (negative result)
-        else { 
-            sNeg += dataWeights[idx]; 
-        }
-
         // compute positive and negative error
         double errorFaceAboveThres = sPos + (tNeg - sNeg);
         double errorFaceBelowThres = sNeg + (tPos - sPos);
@@ -1020,6 +1008,18 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
             double beta = bestError/(1.0-bestError);
             bestClassifier->m_Weight = std::log(1.0/beta);
         }
+
+        // update sums
+
+        // face (positive result)
+        if(trainingLabel[idx] == 1) { 
+            sPos += dataWeights[idx]; 
+        }
+            
+        // background (negative result)
+        else { 
+            sNeg += dataWeights[idx]; 
+        }
     }
 
     return bestError;
@@ -1039,7 +1039,7 @@ void MainWindow::UpdateDataWeights(double *features, int *trainingLabel, CWeakCl
     double total = 0.0;
 
     // compute beta from alpha weight
-    double beta = 1 / std::exp(weakClassifier.m_Weight);
+    double beta = std::exp(-weakClassifier.m_Weight);
     int ec = 0;
 
     for(int i = 0; i < numTrainingExamples; i++)
@@ -1051,24 +1051,24 @@ void MainWindow::UpdateDataWeights(double *features, int *trainingLabel, CWeakCl
         if( weakClassifier.m_Polarity == 1 )
         {
             // feature lower than threshold and not a face
-            if(features[i] <= weakClassifier.m_Threshold && trainingLabel[i] == 0) {
+            if(features[i] < weakClassifier.m_Threshold && trainingLabel[i] == 0) {
                 ec = 0;
             }
-            else if(features[i] > weakClassifier.m_Threshold && trainingLabel[i] == 1) {
+            else if(features[i] >= weakClassifier.m_Threshold && trainingLabel[i] == 1) {
                 // feature higher than threshold and a face
                 ec = 0;
             }
         }
 
         // faces below threshold
-        if( weakClassifier.m_Polarity == 0 )
+        else if( weakClassifier.m_Polarity == 0 )
         {
             // feature lower than threshold and a face
-            if(features[i] <= weakClassifier.m_Threshold && trainingLabel[i] == 1) {
+            if(features[i] < weakClassifier.m_Threshold && trainingLabel[i] == 1) {
                 ec = 0;
             }
             // feature higher than threshold and not a face
-            else if(features[i] > weakClassifier.m_Threshold && trainingLabel[i] == 0) {
+            else if(features[i] >= weakClassifier.m_Threshold && trainingLabel[i] == 0) {
                 ec = 0;
             }
         }
@@ -1113,7 +1113,7 @@ double MainWindow::ClassifyBox(double *integralImage, int c0, int r0, int size, 
 
     // compute classification score
     // sum_t alpha_t*h_t(x) - 0.5*sum_t alpha_t
-    double score = std::abs(weightedFeatureScore - (0.5*weightScore));
+    double score = weightedFeatureScore - (0.5*weightScore);
 
     delete [] features;
 
