@@ -54,8 +54,7 @@ void MainWindow::OpenDataSet()
         QString posName;
         QString negName;
         QString directoryName = fileName;
-
-        directoryName.remove(directoryName.lastIndexOf('/') + 1, directoryName.length());
+        directoryName.remove(directoryName.lastIndexOf(QDir::separator()) + 1, directoryName.length());
 
         QString readText;
         in >> readText;

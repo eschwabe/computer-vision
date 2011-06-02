@@ -15,7 +15,7 @@
   <valuemap type="QVariantMap">
    <value key="ProjectExplorer.ProjectConfiguration.DisplayName" type="QString">Desktop</value>
    <value key="ProjectExplorer.ProjectConfiguration.Id" type="QString">Qt4ProjectManager.Target.DesktopTarget</value>
-   <value key="ProjectExplorer.Target.ActiveBuildConfiguration" type="int">0</value>
+   <value key="ProjectExplorer.Target.ActiveBuildConfiguration" type="int">1</value>
    <value key="ProjectExplorer.Target.ActiveRunConfiguration" type="int">0</value>
    <valuemap key="ProjectExplorer.Target.BuildConfiguration.0" type="QVariantMap">
     <valuemap key="ProjectExplorer.BuildConfiguration.BuildStep.0" type="QVariantMap">
@@ -96,8 +96,8 @@
     <value key="Qt4ProjectManager.Qt4RunConfiguration.UseTerminal" type="bool">false</value>
     <valuelist key="Qt4ProjectManager.Qt4RunConfiguration.UserEnvironmentChanges" type="QVariantList"/>
     <value key="Qt4ProjectManager.Qt4RunConfiguration.UserSetName" type="bool">false</value>
-    <value key="Qt4ProjectManager.Qt4RunConfiguration.UserSetWorkingDirectory" type="bool">false</value>
-    <value key="Qt4ProjectManager.Qt4RunConfiguration.UserWorkingDirectory" type="QString"></value>
+    <value key="Qt4ProjectManager.Qt4RunConfiguration.UserSetWorkingDirectory" type="bool">true</value>
+    <value key="Qt4ProjectManager.Qt4RunConfiguration.UserWorkingDirectory" type="QString">/Users/eschwabe/Project/computer-vision-build/hw4-build/release</value>
    </valuemap>
    <value key="ProjectExplorer.Target.RunConfigurationCount" type="int">1</value>
   </valuemap>

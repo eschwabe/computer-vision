@@ -2,6 +2,7 @@
 #include "math.h"
 #include "ui_mainwindow.h"
 #include <QtGui>
+#include <cmath>
 
 /*******************************************************************************
 The following are helper routines with code already written.
@@ -32,7 +33,7 @@ void MainWindow::OpenDataSet(QDir posdirectory, QDir negdirectory, double *train
     for(i=0;i<imgNames.length();i++)
         if(idx < numTrainingExamples/2)
         {
-            inImage.load(posdirectory.absolutePath() + "\\" + imgNames.at(i));
+            inImage.load(posdirectory.absolutePath() + QDir::separator() + imgNames.at(i));
 
             if(!(inImage.isNull()))
             {
@@ -54,7 +55,7 @@ void MainWindow::OpenDataSet(QDir posdirectory, QDir negdirectory, double *train
         for(i=0;i<imgNames.length();i++)
             if(idx < numTrainingExamples)
             {
-                inImage.load(negdirectory.absolutePath() + "\\" + imgNames.at(i));
+                inImage.load(negdirectory.absolutePath() + QDir::separator() + imgNames.at(i));
 
                 if(!(inImage.isNull()))
                 {
