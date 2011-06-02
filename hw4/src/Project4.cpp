@@ -212,7 +212,7 @@ void MainWindow::DisplayClassifiers(QImage *displayImage, CWeakClassifiers *weak
 
     displayImage->fill(qRgb(0,0,0));
 
-    for(i=0;i<numWeakClassifiers & inBounds;i++)
+    for(i=0;(i<numWeakClassifiers) && inBounds;i++)
     {
         for(r=0;r<size;r++)
             for(c=0;c<size;c++)
@@ -843,22 +843,21 @@ double MainWindow::BilinearInterpolation(double *image, double x, double y, int 
     int baseY = (int)y;
 
     // check if pixels in range
-    if( x >= 0 && (x+1) < w && y >= 0 )
-    {
-        // compute weight values
-        double a = x-baseX;
-        double b = y-baseY;
+    //if( x >= 0 && (x+1) < w && y >= 0 )
 
-        // find pixels
-        double pixelXY = image[(baseY)*w+(baseX)];
-        double pixelX1Y = image[(baseY)*w+(baseX+1)];
-        double pixelXY1 = image[(baseY+1)*w+(baseX)];
-        double pixelX1Y1 = image[(baseY+1)*w+(baseX+1)];
+    // compute weight values
+    double a = x-baseX;
+    double b = y-baseY;
 
-        // compute interpolated pixel
-        // f (x + a, y + b) = (1 - a)(1 - b) f (x, y) + a(1 - b) f (x + 1, y) + (1 - a)b f (x,y + 1) + ab f (x + 1, y + 1)
-        value = ((1-a)*(1-b)*pixelXY) + (a*(1-b)*pixelX1Y) + ((1-a)*b*pixelXY1) + (a*b*pixelX1Y1);
-    }
+    // find pixels
+    double pixelXY = image[(baseY)*w+(baseX)];
+    double pixelX1Y = image[(baseY)*w+(baseX+1)];
+    double pixelXY1 = image[(baseY+1)*w+(baseX)];
+    double pixelX1Y1 = image[(baseY+1)*w+(baseX+1)];
+
+    // compute interpolated pixel
+    // f (x + a, y + b) = (1 - a)(1 - b) f (x, y) + a(1 - b) f (x + 1, y) + (1 - a)b f (x,y + 1) + ab f (x + 1, y + 1)
+    value = ((1.0-a)*(1.0-b)*pixelXY) + (a*(1.0-b)*pixelX1Y) + ((1.0-a)*b*pixelXY1) + (a*b*pixelX1Y1);
 
     return value;
 }
@@ -980,6 +979,18 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
         // find sorted feature index
         int idx = featureSortIdx[i];
 
+        // update sums
+
+        // face (positive result)
+        if(trainingLabel[idx] == 1) { 
+            sPos += dataWeights[idx]; 
+        }
+            
+        // background (negative result)
+        else { 
+            sNeg += dataWeights[idx]; 
+        }
+
         // compute positive and negative error
         double errorFaceAboveThres = sPos + (tNeg - sNeg);
         double errorFaceBelowThres = sNeg + (tPos - sPos);
@@ -1006,20 +1017,7 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
             bestClassifier->m_Threshold = features[idx];
 
             // compute error weight
-            double beta = bestError/(1.0-bestError);
-            bestClassifier->m_Weight = std::log(1.0/beta);
-        }
-
-        // update sums
-
-        // face (positive result)
-        if(trainingLabel[idx] == 1) { 
-            sPos += dataWeights[idx]; 
-        }
-            
-        // background (negative result)
-        else { 
-            sNeg += dataWeights[idx]; 
+            bestClassifier->m_Weight = std::log((1.0-bestError)/bestError);
         }
     }
 
@@ -1040,8 +1038,8 @@ void MainWindow::UpdateDataWeights(double *features, int *trainingLabel, CWeakCl
     double total = 0.0;
 
     // compute beta from alpha weight
-    double beta = std::exp(-weakClassifier.m_Weight);
-    int ec = 0;
+    double beta = 1.0 / std::exp(weakClassifier.m_Weight);
+    bool ec = 0;
 
     for(int i = 0; i < numTrainingExamples; i++)
     {
@@ -1055,8 +1053,8 @@ void MainWindow::UpdateDataWeights(double *features, int *trainingLabel, CWeakCl
             if(features[i] < weakClassifier.m_Threshold && trainingLabel[i] == 0) {
                 ec = 0;
             }
+            // feature higher than threshold and a face
             else if(features[i] >= weakClassifier.m_Threshold && trainingLabel[i] == 1) {
-                // feature higher than threshold and a face
                 ec = 0;
             }
         }
@@ -1106,13 +1104,21 @@ double MainWindow::ClassifyBox(double *integralImage, int c0, int r0, int size, 
     double weightedFeatureScore = 0.0;
     double weightScore = 0.0;
 
+    // compute classification score
     for(int i = 0; i < numWeakClassifiers; i++)
     {
-        weightedFeatureScore += weakClassifiers[i].m_Weight*features[i];
+        if(features[i] > weakClassifiers[i].m_Threshold)
+        {
+            weightedFeatureScore += weakClassifiers[i].m_Weight*weakClassifiers[i].m_Polarity;
+        }
+        else
+        {
+            weightedFeatureScore += weakClassifiers[i].m_Weight*(1.0 - weakClassifiers[i].m_Polarity);
+        }
+
         weightScore += weakClassifiers[i].m_Weight;
     }
 
-    // compute classification score
     // sum_t alpha_t*h_t(x) - 0.5*sum_t alpha_t
     double score = weightedFeatureScore - (0.5*weightScore);
 
@@ -1152,7 +1158,7 @@ void MainWindow::NMS(QMap<double, CDetection> *faceDetections, double xyThreshol
                 std::pow((iterCurrent->m_Y - iterScan->m_Y), 2.0) );
 
             // compute scale
-            double scale = std::abs( iterCurrent->m_Scale - iterScan->m_Scale );
+            double scale = std::sqrt( std::pow(iterCurrent->m_Scale - iterScan->m_Scale, 2.0) );
             
             // if detection found within position and scale thresholds, stop scan
             if( distance < xyThreshold && scale < scaleThreshold ) {

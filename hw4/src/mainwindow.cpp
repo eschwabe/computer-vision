@@ -54,7 +54,7 @@ void MainWindow::OpenDataSet()
         QString posName;
         QString negName;
         QString directoryName = fileName;
-        directoryName.remove(directoryName.lastIndexOf(QDir::separator()) + 1, directoryName.length());
+        directoryName.remove(directoryName.lastIndexOf('/') + 1, directoryName.length());
 
         QString readText;
         in >> readText;
@@ -99,7 +99,7 @@ void MainWindow::SaveImage()
     QString fileName = QFileDialog::getSaveFileName(this);
 
     if (!fileName.isEmpty())
-        m_DisplayImage.save(fileName);
+        m_DisplayImage.save(fileName, "png", 100);
 }
 
 void MainWindow::SaveClassifier()
