@@ -295,7 +295,7 @@ void MainWindow::InitializeFeatures(CWeakClassifiers *weakClassifiers, int numWe
         h = 0.25 + 0.71*(double) rand()/(double) RAND_MAX;
         y = 0.02 + (0.96 - h)*(double) rand()/(double) RAND_MAX;
 
-        int boxType = rand()%3;
+        int boxType = rand()%4;
 
         if(boxType == 0)
         {
@@ -361,6 +361,40 @@ void MainWindow::InitializeFeatures(CWeakClassifiers *weakClassifiers, int numWe
             weakClassifiers[i].m_Box[2][0][1] = y;
             weakClassifiers[i].m_Box[2][1][0] = x + w;
             weakClassifiers[i].m_Box[2][1][1] = y + h;
+        }
+
+        // Eric Schwabe
+        // ADD 4 BOX FEATURE 
+        if(boxType == 3)
+        {
+            // 4 box grid
+            weakClassifiers[i].m_NumBoxes = 4;
+            weakClassifiers[i].m_Box = new double [weakClassifiers[i].m_NumBoxes][2][2];
+            weakClassifiers[i].m_BoxSign = new double [weakClassifiers[i].m_NumBoxes];
+
+            weakClassifiers[i].m_BoxSign[0] = 1.0;
+            weakClassifiers[i].m_Box[0][0][0] = x;
+            weakClassifiers[i].m_Box[0][0][1] = y;
+            weakClassifiers[i].m_Box[0][1][0] = x + w/2;
+            weakClassifiers[i].m_Box[0][1][1] = y + h/2;
+
+            weakClassifiers[i].m_BoxSign[1] = -1.0;
+            weakClassifiers[i].m_Box[1][0][0] = x + w/2;
+            weakClassifiers[i].m_Box[1][0][1] = y;
+            weakClassifiers[i].m_Box[1][1][0] = x + w;
+            weakClassifiers[i].m_Box[1][1][1] = y + h/2;
+
+            weakClassifiers[i].m_BoxSign[2] = -1.0;
+            weakClassifiers[i].m_Box[2][0][0] = x;
+            weakClassifiers[i].m_Box[2][0][1] = y + h/2;
+            weakClassifiers[i].m_Box[2][1][0] = x + w/2;
+            weakClassifiers[i].m_Box[2][1][1] = y + h;
+
+            weakClassifiers[i].m_BoxSign[3] = 1.0;
+            weakClassifiers[i].m_Box[3][0][0] = x + w/2;
+            weakClassifiers[i].m_Box[3][0][1] = y + h/2;
+            weakClassifiers[i].m_Box[3][1][0] = x + w;
+            weakClassifiers[i].m_Box[3][1][1] = y + h;
         }
 
         weakClassifiers[i].m_Area = w*h;
