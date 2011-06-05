@@ -75,6 +75,7 @@
       </ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
       <SuppressStartupBanner>true</SuppressStartupBanner>
+      <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <Midl>
       <DefaultCharType>Unsigned</DefaultCharType>
@@ -118,6 +119,7 @@
       </ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
       <SuppressStartupBanner>true</SuppressStartupBanner>
+      <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <Midl>
       <DefaultCharType>Unsigned</DefaultCharType>
