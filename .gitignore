@@ -2,7 +2,6 @@ hw1-build
 .DS_Store
 hw1/src/debug
 hw1/src/ipch
-syntax: glob
 hw1/src/ImgFilter.opensdf
 hw1/src/ImgFilter.pdb
 hw1/src/ui_mainwindow.h
